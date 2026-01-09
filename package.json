@@ -1,0 +1,34 @@
+{
+    "name": "wxt-vue-starter",
+    "description": "cybeflow插件是一个配合cybeflow网站使用，帮助你在X平台发布内容的工具。cybeflow插件将辅助你通过自动化的方式规划自媒体的内容发布，一键将内容发布到X平台。",
+    "private": true,
+    "version": "0.3.9",
+    "type": "module",
+    "scripts": {
+        "dev": "wxt",
+        "dev:firefox": "wxt -b firefox",
+        "build": "wxt build",
+        "build:dev": "wxt build --mode development",
+        "build:firefox": "wxt build -b firefox",
+        "zip": "wxt zip",
+        "zip:dev": "wxt zip --mode development",
+        "zip:firefox": "wxt zip -b firefox",
+        "compile": "vue-tsc --noEmit",
+        "postinstall": "wxt prepare"
+    },
+    "dependencies": {
+        "@pureadmin/utils": "^2.6.2",
+        "axios": "^1.11.0",
+        "crypto-js": "^4.2.0",
+        "element-plus": "^2.10.5",
+        "jsencrypt": "^3.3.2",
+        "sass": "^1.89.2",
+        "vue": "^3.5.13"
+    },
+    "devDependencies": {
+        "@wxt-dev/module-vue": "^1.0.2",
+        "typescript": "5.6.3",
+        "vue-tsc": "^2.2.10",
+        "wxt": "^0.20.6"
+    }
+}

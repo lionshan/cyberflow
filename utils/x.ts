@@ -1,0 +1,1013 @@
+interface AccountInfo {
+    provider: string;
+    accountId: string;
+    username: string;
+    description?: string;
+    profileUrl?: string;
+    avatarUrl?: string;
+    extraData: unknown;
+    xAccountInfoChange?: boolean;
+}
+import { selfLocalStorage } from "@/utils/storage";
+async function checkNeedRetry() {
+    //等待2秒再检查
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    let needRetry = Array.from(document.querySelectorAll('[type="button"]')).find((item) => {
+        let text = (item as HTMLButtonElement).innerText;
+        return text == "Retry" || text == "重試" || text == "重试";
+    });
+
+    if (needRetry) {
+        (needRetry as HTMLButtonElement).click();
+        return false;
+    } else {
+        return true;
+    }
+}
+function waitForElement(selector: string, timeout = 20000): Promise<Element> {
+    return new Promise((resolve, reject) => {
+        const element = document.querySelector(selector);
+        if (element) {
+            resolve(element);
+            return;
+        }
+
+        const observer = new MutationObserver(() => {
+            const element = document.querySelector(selector);
+            if (element) {
+                resolve(element);
+                observer.disconnect();
+            }
+        });
+
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+
+        setTimeout(() => {
+            observer.disconnect();
+            reject(new Error("随机滚动失败，未找到指定元素"));
+            console.log(`Element with selector "${selector}" not found within ${timeout}ms`);
+        }, timeout);
+    });
+}
+
+function waitSendSuccess(timeout = 20000): Promise<Element> {
+    return new Promise((resolve, reject) => {
+        const element = document.querySelector('[data-testid="toast"]');
+        if (element) {
+            resolve(element);
+            return;
+        }
+        const observer = new MutationObserver(() => {
+            const element = document.querySelector('[data-testid="toast"]');
+            if (element) {
+                resolve(element);
+                observer.disconnect();
+            }
+        });
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+
+        setTimeout(() => {
+            observer.disconnect();
+            reject(new Error("发送回复失败"));
+        }, timeout);
+    });
+}
+async function findTweetIdWithUserNameFirst(task: any): Promise<string | null> {
+    let articlesDOM = document.querySelectorAll("article");
+
+    const articlesDOMArr = Array.from(articlesDOM).filter((article) => {
+        return article.querySelector("a")?.href == `https://x.com/${task.userName}`;
+    });
+    let postDOM = articlesDOMArr[0];
+    let newTweetId;
+    if (postDOM) {
+        newTweetId = await getTweetId(postDOM);
+    }
+    return newTweetId || null;
+}
+export async function getXAccountInfo(): Promise<AccountInfo> {
+    // 直接使用fetch API获取 X 页面HTML
+    let htmlText = "";
+    try {
+        const response = await fetch("https://x.com/home", {
+            method: "GET",
+            headers: {
+                Accept: "text/html",
+                "Content-Type": "text/html"
+            },
+            credentials: "include" // 包含cookie以确保认证
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP错误，状态码: ${response.status}`);
+        }
+
+        htmlText = await response.text();
+    } catch (error) {
+        console.error("获取 X 页面HTML失败:", error);
+        throw new Error(`网络异常无法访问x.com,请检查网络设置`);
+    }
+
+    // 解析window.__INITIAL_STATE__
+    const initialStateMatch = htmlText.match(/window\.__INITIAL_STATE__\s*=\s*(\{.+?\})(?:\s*;|\s*<\/script>)/s);
+
+    if (!initialStateMatch || !initialStateMatch[1]) {
+        throw new Error("无法找到 __INITIAL_STATE__ 数据");
+    }
+
+    const jsonStr = initialStateMatch[1];
+
+    // 尝试解析JSON
+    let initialState;
+    try {
+        initialState = JSON.parse(jsonStr);
+    } catch (parseError) {
+        console.error("解析 X __INITIAL_STATE__ 数据失败:", parseError);
+        // 清理可能的JSON问题
+        const cleanedJsonStr = jsonStr
+            .replace(/[\u0000-\u001F\u007F-\u009F]/g, "") // 移除控制字符
+            .replace(/:undefined,/g, ":null,") // 处理undefined
+            .replace(/:undefined}/g, ":null}"); // 处理末尾的undefined
+
+        try {
+            initialState = JSON.parse(cleanedJsonStr);
+        } catch {
+            throw new Error("解析 __INITIAL_STATE__ 数据失败");
+        }
+    }
+
+    // 从entities.users.entities中获取用户信息，这里的键是动态的用户ID
+    const usersEntities = initialState.entities?.users?.entities;
+    if (!usersEntities || Object.keys(usersEntities).length === 0) {
+        return null;
+    }
+
+    // 获取第一个用户ID（假设只有当前登录用户）
+    const userId = Object.keys(usersEntities)[0];
+    const userInfo = usersEntities[userId];
+
+    if (!userInfo) {
+        return null;
+    }
+
+    const result: AccountInfo = {
+        provider: "x",
+        accountId: userInfo.screen_name,
+        username: userInfo.name,
+        description: userInfo.description,
+        profileUrl: `https://x.com/${userInfo.screen_name}`,
+        avatarUrl: userInfo.profile_image_url_https,
+        extraData: initialState
+    };
+    // let oldUserName = await selfLocalStorage.getItem("xUserName");
+    // if (oldUserName && oldUserName !== userInfo.screen_name) {
+    //     console.log(
+    //         "oldUserNameoldUserName",
+    //         oldUserName,
+    //         userInfo.screen_name
+    //     );
+    //     //更换账号，清理工作流
+    //      browser.runtime.sendMessage({
+    //         action: "stopWork"
+    //     });
+    //     return {
+    //         ...result,
+    //         xAccountInfoChange: true
+    //     };
+    // }
+    selfLocalStorage.setItem("xUserName", userInfo.screen_name);
+    return result;
+}
+
+function findElementByInnerText(text: string): Element | null {
+    const allElements = document.querySelectorAll('[data-testid="tweetText"]');
+
+    for (const element of allElements) {
+        if (element.innerText === text) {
+            return element;
+        }
+    }
+    return null;
+}
+
+export async function DynamicX(data: any) {
+    const { text } = data;
+    // 辅助函数：等待元素出现
+    function waitForElement(selector: string, timeout = 20000): Promise<Element> {
+        return new Promise((resolve, reject) => {
+            const element = document.querySelector(selector);
+            if (element) {
+                resolve(element);
+                return;
+            }
+
+            const observer = new MutationObserver(() => {
+                const element = document.querySelector(selector);
+                if (element) {
+                    resolve(element);
+                    observer.disconnect();
+                }
+            });
+
+            observer.observe(document.body, {
+                childList: true,
+                subtree: true
+            });
+
+            setTimeout(() => {
+                observer.disconnect();
+                reject(new Error(`随机滚动失败，未找到指定元素`));
+
+                console.log(`Element with selector "${selector}" not found within ${timeout}ms`);
+            }, timeout);
+        });
+    }
+
+    try {
+        let needRetry = await checkNeedRetry();
+        if (!needRetry) {
+            throw new Error("页面加载失败，已点击重试按钮，请稍后");
+        }
+        // 等待编辑器元素出现
+        await waitForElement('div[data-contents="true"]');
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+
+        // 获取编辑器元素
+        const editor = document.querySelector('div[data-contents="true"]');
+        if (!editor) {
+            console.log("未找到编辑器元素");
+            throw new Error("编辑器元素未找到");
+        }
+
+        // 聚焦编辑器
+        (editor as HTMLElement).focus();
+        // 使用 ClipboardEvent 粘贴文本
+        const combinedText = text; //+ Math.random().toString(36).substring(2, 15);
+        const pasteEvent = new ClipboardEvent("paste", {
+            bubbles: true,
+            cancelable: true,
+            clipboardData: new DataTransfer()
+        });
+        pasteEvent.clipboardData!.setData("text/plain", combinedText);
+        editor.dispatchEvent(pasteEvent);
+
+        // 处理媒体上传（图片和视频）
+        // const mediaFiles = [...(images || []), ...(videos || [])];
+        // if (mediaFiles.length > 0) {
+        //     // 查找文件输入元素
+        //     const fileInput = document.querySelector(
+        //         'input[type="file"]'
+        //     ) as HTMLInputElement;
+        //     if (!fileInput) {
+        //         console.log("未找到文件输入元素");
+        //         return;
+        //     }
+
+        //     // 创建数据传输对象
+        //     const dataTransfer = new DataTransfer();
+
+        //     // 上传文件（最多4个）
+        //     for (let i = 0; i < mediaFiles.length; i++) {
+        //         if (i >= 4) {
+        //             console.log("X 最多支持 4 张 ，跳过");
+        //             break;
+        //         }
+
+        //         const fileInfo = mediaFiles[i];
+        //         console.log("try upload file", fileInfo);
+
+        //         // 获取文件内容
+        //         const response = await fetch(fileInfo.url);
+        //         const arrayBuffer = await response.arrayBuffer();
+        //         const file = new File([arrayBuffer], fileInfo.name, {
+        //             type: fileInfo.type
+        //         });
+        //         console.log("file", file);
+        //         dataTransfer.items.add(file);
+        //     }
+
+        //     // 设置文件并触发事件
+        //     fileInput.files = dataTransfer.files;
+
+        //     // 触发change事件
+        //     const changeEvent = new Event("change", { bubbles: true });
+        //     fileInput.dispatchEvent(changeEvent);
+
+        //     // 触发input事件
+        //     const inputEvent = new Event("input", { bubbles: true });
+        //     fileInput.dispatchEvent(inputEvent);
+
+        //     console.log("文件上传操作完成");
+        // }
+
+        // 判断是否自动发布
+        // 等待一段时间确保文件上传完成
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+
+        // 查找发布按钮
+        const allButtons = document.querySelectorAll("button");
+        const publishButton = Array.from(allButtons).find((button) => button.textContent?.includes("发帖") || button.textContent?.includes("Post") || button.textContent?.includes("發佈"));
+
+        console.log("sendButton", publishButton);
+
+        if (publishButton) {
+            // 如果找到发布按钮，检查是否可点击
+            let attempts = 0;
+            while (publishButton.disabled && attempts < 10) {
+                await new Promise((resolve) => setTimeout(resolve, 3000));
+                attempts++;
+                console.log(`Waiting for send button to be enabled. Attempt ${attempts}/10`);
+            }
+
+            if (publishButton.disabled) {
+                console.log("Send button is still disabled after 10 attempts");
+                throw new Error("Send button is still disabled after 10 attempts");
+            }
+
+            console.log("sendButton clicked");
+            // 点击发布按钮
+            const clickEvent = new Event("click", { bubbles: true });
+            publishButton.dispatchEvent(clickEvent);
+        } else {
+            // 如果没找到发布按钮，尝试使用快捷键发布
+            console.log("未找到'发送'按钮");
+            const keyEvent = new KeyboardEvent("keydown", {
+                bubbles: true,
+                cancelable: true,
+                key: "Enter",
+                code: "Enter",
+                keyCode: 13,
+                which: 13,
+                metaKey: true,
+                composed: true
+            });
+
+            // 再次聚焦编辑器并发送快捷键
+            (editor as HTMLElement).focus();
+            editor.dispatchEvent(keyEvent);
+            console.log("CMD+Enter 事件触发完成");
+        }
+        //发布后获取发版帖id
+        let toastDOM = await waitSendSuccess();
+        if (toastDOM.innerText.indexOf("Your post was sent") === -1 && toastDOM.innerText.indexOf("你的帖子已发送") === -1 && toastDOM.innerText.indexOf("你的貼文已發送") === -1) {
+            throw new Error("发帖发送失败," + toastDOM.innerText);
+        }
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        let postTweetId = await findTweetIdWithUserNameFirst(data);
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+
+        // await new Promise((resolve) => setTimeout(resolve, 1000));
+        // let publishDOM = findElementByInnerText(combinedText);
+        // if (!publishDOM) {
+        //     await new Promise((resolve) => setTimeout(resolve, 3000));
+        //     publishDOM = findElementByInnerText(combinedText);
+        // }
+        // let newTweetId;
+        // if (publishDOM) {
+        //     newTweetId = await getTweetId(publishDOM);
+        // }
+
+        // if (!newTweetId) {
+        //     newTweetId = Math.random().toString(36).substring(2, 15);
+        // }
+        return { tweetId: postTweetId };
+    } catch (error) {
+        throw new Error("X 发布过程中出错1:" + error.message);
+    }
+}
+function extractTweetIdFromUrl(url: string): string | null {
+    // 方法1: 使用split分割
+    const parts = url.split("/");
+    const lastPart = parts[parts.length - 1];
+
+    // 验证是否为数字ID
+    if (/^\d+$/.test(lastPart)) {
+        return lastPart;
+    }
+
+    return Math.random().toString(36).substring(2, 15);
+}
+async function getTweetId(node: Element): string | null {
+    // 点击帖子
+    const clickEvent = new Event("click", { bubbles: true });
+    node.dispatchEvent(clickEvent);
+
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    let curHref = window.location.href;
+    console.log(window.location.href);
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    window.history.back();
+    return extractTweetIdFromUrl(curHref);
+}
+async function getTweetIdNew(node: Element): string | null {
+    // 点击帖子
+    const clickEvent = new Event("click", { bubbles: true });
+    node.dispatchEvent(clickEvent);
+
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    let curHref = window.location.href;
+    console.log(window.location.href);
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    return extractTweetIdFromUrl(curHref);
+}
+
+async function getTweetTexts(task: any) {
+    //等待列表加载完成
+    await waitForElement('[data-testid="cellInnerDiv"]');
+    let tweetTexts = Array.from(document.querySelectorAll('div[data-testid="tweetText"]'))
+        .map((div) => {
+            let wrap = div.closest('article[data-testid="tweet"]');
+            if (!wrap) return null;
+            let userDiv = wrap.querySelector('div[data-testid="User-Name"]');
+            if (!userDiv) return null;
+            let userName = userDiv?.children[1]?.children[0]?.children[0]?.innerText;
+            if (!userName) return null;
+            console.log("userName", userName, task.userName);
+            if ("@" + task.userName === userName) return null;
+            //排除自己的帖子
+            return div;
+        })
+        .filter((item) => item !== null);
+    if (tweetTexts.length === 0) {
+        await scrollList();
+        return await getTweetTexts(task);
+    }
+    return tweetTexts;
+}
+function parseDisplayNumber(str: string): number {
+    if (!str || typeof str !== "string") return 0;
+
+    // 清理字符串：去除空格、逗号等
+    const cleanStr = str.trim().replace(/,/g, "").toUpperCase();
+
+    // 纯数字情况
+    if (/^\d+(\.\d+)?$/.test(cleanStr)) {
+        return parseFloat(cleanStr);
+    }
+
+    // 带单位的情况
+    const unitMap = {
+        K: 1000,
+        M: 1000000,
+        B: 1000000000,
+        T: 1000000000000
+    };
+
+    const match = cleanStr.match(/^(\d+(?:\.\d+)?)([KMBT])$/);
+
+    if (match) {
+        const number = parseFloat(match[1]);
+        const multiplier = unitMap[match[2] as keyof typeof unitMap];
+        return number * multiplier;
+    }
+
+    return 0;
+}
+function getTweetScore(tweetText: HTMLElement): number {
+    let wrap = tweetText.closest('article[data-testid="tweet"]');
+    if (!wrap) return 0;
+    let score = wrap.querySelectorAll('[data-testid="app-text-transition-container"]')[3].innerText;
+    return parseDisplayNumber(score);
+}
+function getHighestReviewTweet(tweetTexts) {
+    // 选择评分最高的 tweetText 节点
+    const highestTweetText = tweetTexts.reduce((prev, curr) => {
+        const prevScore = getTweetScore(prev);
+        const currScore = getTweetScore(curr);
+        return currScore > prevScore ? curr : prev;
+    });
+    return highestTweetText;
+}
+async function scrollList() {
+    let oldHeight = document.querySelector("main")?.getBoundingClientRect().height;
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    let cellInnerDiv = Array.from(document.querySelectorAll('[data-testid="cellInnerDiv"]')).map((div) => div);
+    cellInnerDiv[cellInnerDiv.length - 1].scrollIntoView({
+        block: "end"
+    });
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    let newHeight = document.querySelector("main")?.getBoundingClientRect().height;
+    if (oldHeight === newHeight) {
+        //尝试点击加载更多
+        let morePostBtn = document.querySelector('[data-testid="userAvatars"]');
+        if (morePostBtn) {
+            (morePostBtn as HTMLElement).click();
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+        } else {
+            throw new Error("页面已到底部，无法获取更多内容,等待新内容出现");
+        }
+    }
+    return;
+}
+async function getNeedCommentTweet(task: any) {
+    //1. 获取当前页面tweetText节点列表
+    try {
+        let tweetTexts = await getTweetTexts(task);
+
+        //2. 选择最后一个节点
+        let selectedTweetText = tweetTexts[0];
+        if (task.commentType === "higherReview") {
+            selectedTweetText = getHighestReviewTweet(tweetTexts);
+        }
+
+        console.log("选择的tweetText节点:", selectedTweetText);
+
+        //3. 获取改节点id
+        const tweetId = await getTweetId(selectedTweetText);
+        if (!tweetId) {
+            throw new Error("未找到选择节点的 tweetId");
+        }
+        //判断节点是否用过
+        let usedTweetIdsStr = await selfLocalStorage.getItem("usedTweetIds");
+        let usedTweetIds: string[] = usedTweetIdsStr ? JSON.parse(usedTweetIdsStr) : [];
+        if (usedTweetIds.includes(tweetId)) {
+            //滑动页面刷新tweetTexts列表
+            console.log("节点已使用，尝试下一个节点");
+            await scrollList();
+            return await getNeedCommentTweet(task);
+        }
+        //4. 获取需要评论的内容
+        let needCommentContent = (selectedTweetText as HTMLElement).innerText;
+        if (!needCommentContent) {
+            await scrollList();
+            return await getNeedCommentTweet(task);
+        }
+        // 判断已有value数组长度超过100截取后面50个保留
+        if (usedTweetIds.length > 100) {
+            usedTweetIds = usedTweetIds.slice(-50);
+        }
+        selfLocalStorage.setItem("usedTweetIds", JSON.stringify([...usedTweetIds, tweetId]));
+        return { tweetId, needCommentContent };
+    } catch (error) {
+        if (error.message && error.message.includes("随机滚动失败，未找到指定元素")) {
+            window.location.reload();
+            return;
+        }
+        throw error;
+    }
+}
+
+async function getNeedCommentTweetNew(missionId: string, task: any, retrtyCount: number = 0) {
+    //1. 获取当前页面tweetText节点列表
+    if (retrtyCount > 5) {
+        throw new Error("尝试获取需要评论的节点超过5次，终止操作");
+    }
+    retrtyCount++;
+    try {
+        let tweetTexts = await getTweetTexts(task);
+
+        //2. 选择最后一个节点
+        let selectedTweetText = tweetTexts[0];
+        if (task.commentType === "higherReview") {
+            selectedTweetText = getHighestReviewTweet(tweetTexts);
+        }
+
+        console.log("选择的tweetText节点:", selectedTweetText);
+
+        //3. 获取改节点id 这时候打开的是新页面
+        const tweetId = await getTweetIdNew(selectedTweetText);
+        if (!tweetId) {
+            throw new Error("未找到选择节点的 tweetId");
+        }
+        //判断节点是否用过
+        let usedTweetIdsStr = await selfLocalStorage.getItem("usedTweetIds");
+        let usedTweetIds: string[] = usedTweetIdsStr ? JSON.parse(usedTweetIdsStr) : [];
+        if (usedTweetIds.includes(tweetId)) {
+            //滑动页面刷新tweetTexts列表
+            console.log("节点已使用，尝试下一个节点");
+            window.history.back();
+            await new Promise((resolve) => setTimeout(resolve, 5000));
+            await scrollList();
+            return await getNeedCommentTweetNew(missionId, task, retrtyCount);
+        }
+        // 判断已有value数组长度超过100截取后面50个保留
+        if (usedTweetIds.length > 100) {
+            usedTweetIds = usedTweetIds.slice(-50);
+        }
+        selfLocalStorage.setItem("usedTweetIds", JSON.stringify([...usedTweetIds, tweetId]));
+        //4. 获取需要评论的内容
+        let needCommentContent = (selectedTweetText as HTMLElement).innerText;
+        if (!needCommentContent) {
+            window.history.back();
+            await new Promise((resolve) => setTimeout(resolve, 5000));
+            await scrollList();
+            return await getNeedCommentTweetNew(missionId, task, retrtyCount);
+        }
+
+        if (needCommentContent.length === 0) {
+            window.history.back();
+            await new Promise((resolve) => setTimeout(resolve, 5000));
+            await scrollList();
+            return await getNeedCommentTweetNew(missionId, task, retrtyCount);
+        }
+        const response = await browser.runtime.sendMessage({
+            action: "generateComment",
+            data: {
+                missionId,
+                tweetId,
+                tweetText: needCommentContent
+            }
+        });
+
+        console.log("来自 background 的评论内容:", response);
+        if (!response) {
+            throw new Error("回复内容获取失败关闭工作流");
+        }
+        if (!response.canSend) {
+            //需要寻找下一个节点
+            window.history.back();
+            await new Promise((resolve) => setTimeout(resolve, 5000));
+            await scrollList();
+            return await getNeedCommentTweetNew(missionId, task, retrtyCount);
+        }
+        return { tweetId, needCommentContent, response };
+    } catch (error) {
+        throw error;
+    }
+}
+
+async function getCanSendContent(missionId: string, retrtyCountCanSend: number, task: any) {
+    try {
+        retrtyCountCanSend++;
+        if (retrtyCountCanSend > 5) {
+            throw new Error("尝试获取可发送内容超过5次，终止操作");
+        }
+        let needRes = await getNeedCommentTweet(task);
+        if (!needRes) {
+            throw new Error("找不到需要评论的节点");
+        }
+        let { tweetId, needCommentContent } = needRes;
+        if (needCommentContent.length === 0) {
+            throw new Error("需要评论的节点内容为空");
+        }
+        const response = await browser.runtime.sendMessage({
+            action: "generateComment",
+            data: {
+                missionId,
+                tweetId,
+                tweetText: needCommentContent
+            }
+        });
+
+        console.log("来自 background 的评论内容:", response);
+        if (!response) {
+            throw new Error("回复内容获取失败关闭工作流");
+        }
+        if (!response.canSend) {
+            //需要寻找下一个节点
+            await scrollList();
+            await getCanSendContent(missionId, retrtyCountCanSend, task);
+        }
+        return {
+            response,
+            tweetId,
+            needCommentContent
+        };
+    } catch (error) {
+        throw error;
+    }
+}
+async function findsSelectedTweetText(missionId: string, retrtyCount: number, task: any) {
+    try {
+        retrtyCount++;
+        if (retrtyCount > 5) {
+            throw new Error("尝试找到需要评论的帖子超过5次，终止操作");
+        }
+        let retrtyCountCanSend = 0;
+        let { response, tweetId, needCommentContent } = await getCanSendContent(missionId, retrtyCountCanSend, task);
+        let selectedTweetText = Array.from(document.querySelectorAll('div[data-testid="tweetText"]')).find((div) => {
+            console.log("div", div);
+            return (div as HTMLElement).innerText.replaceAll("\n", "") === needCommentContent.replaceAll("\n", "");
+        });
+        if (!selectedTweetText) {
+            return await findsSelectedTweetText(missionId, retrtyCount, task);
+        }
+        return {
+            response,
+            tweetId,
+            needCommentContent,
+            selectedTweetText
+        };
+    } catch (error) {
+        throw error;
+    }
+}
+async function closeCommentDialog() {
+    const closeBtn = document.querySelector('[data-testid="app-bar-close"]');
+    if (closeBtn) {
+        (closeBtn as HTMLElement).click();
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+
+    const confirmBtn = document.querySelector('[data-testid="confirmationSheetCancel"]');
+    if (confirmBtn) {
+        (confirmBtn as HTMLElement).click();
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+    return true;
+}
+export async function MockCommentX(data: any) {
+    // throw new Error("评论发送失败,测试");
+    let retrtyCount = 0;
+    const { missionId } = data;
+    // 辅助函数：等待元素出现
+    try {
+        //检查当前页面是否加载失败
+        let needRetry = await checkNeedRetry();
+        if (!needRetry) {
+            throw new Error("页面加载失败，已点击重试按钮，请稍后");
+        }
+        // let { response, tweetId, needCommentContent, selectedTweetText } = await findsSelectedTweetText(missionId, retrtyCount, data);
+        // selectedTweetText.scrollIntoView();
+        let { response, tweetId, needCommentContent } = await getNeedCommentTweetNew(missionId, data, retrtyCount);
+
+        // let wrapNode = selectedTweetText.closest('article[data-testid="tweet"]');
+        // if (!wrapNode) {
+        //     throw new Error("未找到需要评论的节点的包裹元素");
+        // }
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+
+        // let replyButton = wrapNode.querySelector('button[data-testid="reply"]');
+        let replyButton = document.querySelector('button[data-testid="reply"]');
+        console.log("replyButton", replyButton, response.replyContent);
+        if (!replyButton) {
+            throw new Error("未找到回复按钮");
+        }
+        if (!response.replyContent) {
+            throw new Error("未生成回复内容");
+        }
+        const clickReplyButtonEvent = new Event("click", { bubbles: true });
+        replyButton.dispatchEvent(clickReplyButtonEvent);
+        await waitForElement('div[data-viewportview="true"]');
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+
+        const editor = document.querySelector('div[data-contents="true"]');
+        if (!editor) {
+            console.log("未找到编辑器元素");
+            throw new Error("编辑器元素未找到");
+        }
+
+        if (!editor.closest('[role="dialog"]')) {
+            //二次等待回复对话框打开
+            await new Promise((resolve) => setTimeout(resolve, 10000));
+            if (!editor.closest('[role="dialog"]')) {
+                throw new Error("回复对话框未打开");
+            }
+        }
+
+        // 聚焦编辑器
+        (editor as HTMLElement).focus();
+        // 使用 ClipboardEvent 粘贴文本
+        const combinedText = response.replyContent; //限制最大字符数
+        const pasteEvent = new ClipboardEvent("paste", {
+            bubbles: true,
+            cancelable: true,
+            clipboardData: new DataTransfer()
+        });
+        pasteEvent.clipboardData!.setData("text/plain", combinedText);
+        editor.dispatchEvent(pasteEvent);
+
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        //判断是否超长
+        let checkDOM = document.querySelector('[data-testid="countdown-circle"]');
+        if (checkDOM && checkDOM.children[2]) {
+            let num = (checkDOM.children[2] as HTMLElement).innerText;
+            if (Number(num) < 0) {
+                await closeCommentDialog();
+                throw new Error("评论内容过长，无法发送");
+            }
+        }
+        // 查找发布按钮
+        const allButtons = document.querySelectorAll("button");
+        const publishButton = Array.from(allButtons).find((button) => {
+            return button.textContent == "Reply答" || button.textContent == "Reply" || button.textContent == "回复" || button.textContent == "回覆";
+        });
+
+        console.log("sendButton", publishButton);
+
+        if (publishButton) {
+            // 如果找到发布按钮，检查是否可点击
+            let attempts = 0;
+            while (publishButton.disabled && attempts < 10) {
+                await new Promise((resolve) => setTimeout(resolve, 3000));
+                attempts++;
+                console.log(`Waiting for send button to be enabled. Attempt ${attempts}/10`);
+            }
+
+            if (publishButton.disabled) {
+                console.log("Send button is still disabled after 10 attempts");
+                throw new Error("Send button is still disabled after 10 attempts");
+            }
+
+            console.log("sendButton clicked");
+            // 点击发布按钮
+            const clickEvent = new Event("click", { bubbles: true });
+            publishButton.dispatchEvent(clickEvent);
+        } else {
+            // 如果没找到发布按钮，尝试使用快捷键发布
+            console.log("未找到'发送'按钮");
+            const keyEvent = new KeyboardEvent("keydown", {
+                bubbles: true,
+                cancelable: true,
+                key: "Enter",
+                code: "Enter",
+                keyCode: 13,
+                which: 13,
+                metaKey: true,
+                composed: true
+            });
+
+            // 再次聚焦编辑器并发送快捷键
+            (editor as HTMLElement).focus();
+            editor.dispatchEvent(keyEvent);
+            console.log("CMD+Enter 事件触发完成");
+        }
+
+        let toastDOM = await waitSendSuccess();
+        if (toastDOM.innerText.indexOf("Your post was sent") === -1 && toastDOM.innerText.indexOf("你的帖子已发送") === -1 && toastDOM.innerText.indexOf("你的貼文已發送") === -1) {
+            //需要关闭对话框
+            await closeCommentDialog();
+            throw new Error("评论发送失败," + toastDOM.innerText);
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        let postTweetId = await findTweetIdWithUserNameFirst(data);
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        let res = {
+            postTweetId,
+            tweetId,
+            needCommentContent,
+            replyContent: response.replyContent
+        };
+        console.log("MockCommentX", res, data);
+        return res;
+    } catch (error) {
+        throw new Error("X 发布过程中出错2:" + error.message);
+    }
+}
+
+export async function MockSingleCommentX(data: any) {
+    const { missionId } = data;
+    // 辅助函数：等待元素出现
+    try {
+        let needRetry = await checkNeedRetry();
+        if (!needRetry) {
+            throw new Error("页面加载失败，已点击重试按钮，请稍后");
+        }
+        await waitForElement('[data-testid="tweetText"]');
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        let contentDOM = document.querySelector('[data-testid="tweetText"]');
+        if (!contentDOM) {
+            throw new Error("未找到需要评论的节点");
+        }
+        let needCommentContent = (contentDOM as HTMLElement).innerText;
+        if (needCommentContent.length === 0) {
+            throw new Error("需要评论的节点内容为空");
+        }
+        const response = await browser.runtime.sendMessage({
+            action: "generateComment",
+            data: {
+                missionId,
+                tweetId: data.tweetId,
+                tweetText: needCommentContent
+            }
+        });
+        console.log("来自 background 的评论内容:", response);
+        if (!response) {
+            throw new Error("回复内容获取失败");
+        }
+        if (!response.canSend) {
+            throw new Error("回复内容不可以发布");
+        }
+        let replyButton = document.querySelector('button[data-testid="reply"]');
+        console.log("replyButton", replyButton, response.replyContent);
+        if (!replyButton) {
+            throw new Error("未找到回复按钮");
+        }
+        if (!response.replyContent) {
+            throw new Error("未生成回复内容");
+        }
+        const clickReplyButtonEvent = new Event("click", { bubbles: true });
+        replyButton.dispatchEvent(clickReplyButtonEvent);
+        await waitForElement('div[data-viewportview="true"]');
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+
+        const editor = document.querySelector('div[data-contents="true"]');
+        if (!editor) {
+            console.log("未找到编辑器元素");
+            throw new Error("编辑器元素未找到");
+        }
+        if (!editor.closest('[role="dialog"]')) {
+            await new Promise((resolve) => setTimeout(resolve, 10000));
+            if (!editor.closest('[role="dialog"]')) {
+                throw new Error("回复对话框未打开");
+            }
+        }
+
+        // 聚焦编辑器
+        (editor as HTMLElement).focus();
+        // 使用 ClipboardEvent 粘贴文本
+        const combinedText = response.replyContent; //限制最大字符数
+        const pasteEvent = new ClipboardEvent("paste", {
+            bubbles: true,
+            cancelable: true,
+            clipboardData: new DataTransfer()
+        });
+        pasteEvent.clipboardData!.setData("text/plain", combinedText);
+        editor.dispatchEvent(pasteEvent);
+
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        //判断是否超长
+        let checkDOM = document.querySelector('[data-testid="countdown-circle"]');
+        if (checkDOM && checkDOM.children[2]) {
+            let num = (checkDOM.children[2] as HTMLElement).innerText;
+            if (Number(num) < 0) {
+                await closeCommentDialog();
+                // const closeBtn = document.querySelector(
+                //     '[data-testid="app-bar-close"]'
+                // );
+                // if (closeBtn) {
+                //     (closeBtn as HTMLElement).click();
+                //     await new Promise((resolve) => setTimeout(resolve, 1000));
+                // }
+
+                // const confirmBtn = document.querySelector(
+                //     '[data-testid="confirmationSheetCancel"]'
+                // );
+                // if (confirmBtn) {
+                //     (confirmBtn as HTMLElement).click();
+                //     await new Promise((resolve) => setTimeout(resolve, 1000));
+                // }
+                throw new Error("评论内容过长，无法发送");
+            }
+        }
+
+        // 查找发布按钮
+        const allButtons = document.querySelectorAll("button");
+        const publishButton = Array.from(allButtons).find((button) => {
+            return button.textContent == "Reply答" || button.textContent == "Reply" || button.textContent == "回复" || button.textContent == "回覆";
+        });
+
+        console.log("sendButton", publishButton);
+
+        if (publishButton) {
+            // 如果找到发布按钮，检查是否可点击
+            let attempts = 0;
+            while (publishButton.disabled && attempts < 10) {
+                await new Promise((resolve) => setTimeout(resolve, 3000));
+                attempts++;
+                console.log(`Waiting for send button to be enabled. Attempt ${attempts}/10`);
+            }
+
+            if (publishButton.disabled) {
+                console.log("Send button is still disabled after 10 attempts");
+                throw new Error("Send button is still disabled after 10 attempts");
+            }
+
+            console.log("sendButton clicked");
+            // 点击发布按钮
+            const clickEvent = new Event("click", { bubbles: true });
+            publishButton.dispatchEvent(clickEvent);
+        } else {
+            // 如果没找到发布按钮，尝试使用快捷键发布
+            console.log("未找到'发送'按钮");
+            const keyEvent = new KeyboardEvent("keydown", {
+                bubbles: true,
+                cancelable: true,
+                key: "Enter",
+                code: "Enter",
+                keyCode: 13,
+                which: 13,
+                metaKey: true,
+                composed: true
+            });
+
+            // 再次聚焦编辑器并发送快捷键
+            (editor as HTMLElement).focus();
+            editor.dispatchEvent(keyEvent);
+            console.log("CMD+Enter 事件触发完成");
+        }
+        let toastDOM = await waitSendSuccess();
+        if (toastDOM.innerText.indexOf("Your post was sent") === -1 && toastDOM.innerText.indexOf("你的帖子已发送") === -1 && toastDOM.innerText.indexOf("你的貼文已發送") === -1) {
+            await closeCommentDialog();
+            throw new Error("评论发送失败," + toastDOM.innerText);
+        }
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        let postTweetId = await findTweetIdWithUserNameFirst(data);
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        return {
+            postTweetId,
+            needCommentContent,
+            replyContent: response.replyContent
+        };
+    } catch (error) {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        throw new Error("X 发布过程中出错3:" + error.message);
+    }
+}
