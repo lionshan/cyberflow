@@ -4,19 +4,8 @@
         <div class="header">
             <div class="user-info">
                 <div class="avatar">
-                    <img
-                        v-if="userData?.avatar != ''"
-                        :src="userData?.avatar"
-                        alt=""
-                    />
-                    <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="32"
-                        height="32"
-                        viewBox="0 0 32 32"
-                        fill="none"
-                        v-else
-                    >
+                    <img v-if="userData?.avatar != ''" :src="userData?.avatar" alt="" />
+                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" fill="none" v-else>
                         <g id="Group 1000006495">
                             <path
                                 id="Vector"
@@ -46,92 +35,85 @@
             </div>
         </div>
 
+        <!-- content Tab -->
+        <div class="nav-tabs" v-if="showContent === 'home'">
+            <div class="nav-tab-item" :class="{ active: activeTab === 'daily' }" @click="activeTab = 'daily'">日常模式</div>
+            <div class="nav-tab-item" :class="{ active: activeTab === 'comment' }" @click="activeTab = 'comment'">一键评论</div>
+        </div>
+
         <!-- 内容区域 -->
         <div class="home_content" v-if="showContent === 'home'">
-            <div class="content">
-                <!-- Twitter账户信息 -->
-                <div class="info-row">
-                    <div class="row_wrap">
-                        <span class="label">Twitter 账户：</span>
-                        <span class="value" v-if="xData != null">{{
-                            xData?.accountId
-                        }}</span>
-                        <span class="tips" v-if="xData == null"
-                            >点击检测账户</span
-                        >
+            <template v-if="activeTab === 'daily'">
+                <div class="content">
+                    <!-- Twitter账户信息 -->
+                    <div class="info-row">
+                        <div class="row_wrap">
+                            <span class="label">Twitter 账户：</span>
+                            <span class="value" v-if="xData != null">{{ xData?.accountId }}</span>
+                            <span class="tips" v-if="xData == null">点击检测账户</span>
+                        </div>
+
+                        <div class="action-btn" @click="checkX">检测账户</div>
                     </div>
 
-                    <div class="action-btn" @click="checkX">检测账户</div>
+                    <!-- 工作流信息 -->
+                    <div class="info-row">
+                        <div class="row_wrap">
+                            <span class="label">工作流：</span>
+                            <span class="value" v-if="selectflows.length > 0">{{ showWorkflowName }}</span>
+                            <span class="tips" v-if="selectflows.length === 0">点击选择工作流</span>
+                        </div>
+
+                        <div
+                            class="action-btn"
+                            :class="{
+                                actionDisable: !xData?.accountId
+                            }"
+                            @click="openWorkflowList"
+                        >
+                            选择工作流
+                        </div>
+                    </div>
                 </div>
-
-                <!-- 工作流信息 -->
-                <div class="info-row">
-                    <div class="row_wrap">
-                        <span class="label">工作流：</span>
-                        <span class="value" v-if="selectflows.length > 0">{{
-                            showWorkflowName
-                        }}</span>
-                        <span class="tips" v-if="selectflows.length === 0"
-                            >点击选择工作流</span
-                        >
-                    </div>
-
+                <!-- 开启按钮 -->
+                <div class="start-section">
                     <div
-                        class="action-btn"
+                        class="start-btn"
                         :class="{
-                            actionDisable: !xData?.accountId
+                            actionDisable: selectflows.length == 0 || xData == null
                         }"
-                        @click="openWorkflowList"
+                        @click="startJob"
+                        v-if="!jobId"
                     >
-                        选择工作流
+                        开启
+                    </div>
+                    <div class="stop-btn" @click="stopJob" v-else>
+                        停止
+                        <div class="tips">开启工作流后请不要切换浏览器tab页面，或者操作鼠标，插件将自动打开x.com进行工作</div>
                     </div>
                 </div>
-            </div>
-            <!-- 开启按钮 -->
-            <div class="start-section">
-                <div
-                    class="start-btn"
-                    :class="{
-                        actionDisable: selectflows.length == 0 || xData == null
-                    }"
-                    @click="startJob"
-                    v-if="!jobId"
-                >
-                    开启
-                </div>
-                <div class="stop-btn" @click="stopJob" v-else>
-                    停止
-                    <div class="tips">
-                        开启工作流后请不要切换浏览器tab页面，或者操作鼠标，插件将自动打开x.com进行工作
-                    </div>
-                </div>
-            </div>
 
-            <div class="log_wrap" v-if="!!jobId">
-                <div
-                    class="log_item"
-                    v-for="log in reverseLogs"
-                    :key="log.time + Math.random()"
-                >
-                    <div class="time">{{ log.time }}</div>
-                    <div class="log">{{ log.log }}</div>
+                <div class="log_wrap" v-if="!!jobId">
+                    <div class="log_item" v-for="(log, index) in reverseLogs" :key="index">
+                        <div class="time">{{ log.time }}</div>
+                        <div class="log">{{ log.log }}</div>
+                    </div>
                 </div>
-            </div>
+            </template>
+            <!-- 一键评论区域 -->
+            <OneClickComment ref="oneClickCommentRef" @start="startOnClickComment" v-if="activeTab === 'comment'" :curUserName="userData?.nickname" />
         </div>
-        <HomeWorkFlow
-            :workflowList="workflows"
-            :selectList="selectflows"
-            v-if="showContent === 'workflow'"
-            @confirm="backHome"
-        />
+        <HomeWorkFlow :workflowList="workflows" :selectList="selectflows" v-if="showContent === 'workflow'" @confirm="backHome" />
     </div>
 </template>
 
 <script lang="ts" setup>
 const webURL: string = import.meta.env.VITE_API_WEB_URL || "";
-import { ref, defineEmits, defineProps, onMounted, computed, watch } from "vue";
+import { ref, onMounted, computed, watch } from "vue";
 import { workflowApi } from "../api/api";
 import HomeWorkFlow from "@/components/HomeWorkFlow.vue";
+import OneClickComment from "@/components/OneClickComment.vue";
+
 import { ElMessage } from "element-plus";
 import { selfLocalStorage } from "@/utils/storage";
 import type { WorkFlowData } from "@/types/workflow";
@@ -156,8 +138,11 @@ const logs = ref<any[]>([]);
 const workflows = ref<WorkFlowData[]>([]);
 const selectflows = ref<WorkFlowData[]>([]);
 const showContent = ref("home"); // 控制显示内容，'home' 或 'workflow'
+const activeTab = ref("daily"); // daily: 日常模式, comment: 一键评论
 const jobId = ref("");
 let logTimer: any = null;
+const oneClickCommentRef = ref<any>(null);
+
 const showWorkflowName = computed(() => {
     let name = "";
     if (selectflows.value && selectflows.value.length > 0) {
@@ -185,6 +170,36 @@ onUnmounted(() => {
         logTimer = null;
     }
 });
+const startOnClickComment = (aiId: string | number) => {
+    browser.tabs.query({ active: true, currentWindow: true }, (tabs: any) => {
+        const tab = tabs[0];
+        if (!tab || !tab.id || !tab.url) {
+            return;
+        }
+
+        // 1. 判断当前tab页面url是否符合 *://x.com/*/status/*
+        // 简单正则匹配
+        const isXStatusPage = /^https?:\/\/x\.com\/[^/]+\/status\/[^/]+/.test(tab.url);
+        if (!isXStatusPage) {
+            ElMessage.warning("请在推文详情页下使用一键评论功能");
+            // 可选：在这里如果需要停止 OneClickComment 组件的 loading 状态，可能需要 emitting 一个事件或者调用引用方法
+            // 但目前的结构是通过 refs 调用子组件方法较为复杂，暂时只提示
+            if (oneClickCommentRef.value && oneClickCommentRef.value.stopLoading) {
+                oneClickCommentRef.value.stopLoading();
+            }
+            return;
+        }
+        const tabId = tab.id;
+        // 2. 将aiId数据发送给对应tabId的页面
+        // 3. 调用action: "oneClickComment"
+        browser.tabs.sendMessage(tabId, {
+            action: "oneClickComment",
+            data: {
+                aiId: aiId
+            }
+        });
+    });
+};
 const checkLogs = () => {
     //获取日志
     if (logTimer) {
@@ -193,8 +208,7 @@ const checkLogs = () => {
     logTimer = setInterval(async () => {
         let logsStr = await selfLocalStorage.getItem("logs");
         if (logsStr) {
-            logs.value =
-                JSON.parse(logsStr).filter((item: any) => item.showUser) || [];
+            logs.value = JSON.parse(logsStr).filter((item: any) => item.showUser) || [];
         } else {
             logs.value = [];
         }
@@ -202,8 +216,7 @@ const checkLogs = () => {
 
     selfLocalStorage.getItem("logs").then((res) => {
         if (res) {
-            logs.value =
-                JSON.parse(res).filter((item: any) => item.showUser) || [];
+            logs.value = JSON.parse(res).filter((item: any) => item.showUser) || [];
         }
     });
 };
@@ -288,6 +301,9 @@ const backHome = (lists: WorkFlowData[]) => {
     showContent.value = "home";
     selectflows.value = lists;
     selfLocalStorage.setItem("workflow", JSON.stringify(lists));
+};
+const back = () => {
+    showContent.value = "home";
 };
 const openWeb = () => {
     window.open(webURL, "_blank");
@@ -461,6 +477,12 @@ const handleStart = () => {
                 width: 32px !important;
                 height: 32px !important;
             }
+            img {
+                width: 32px;
+                object-fit: contain;
+                height: 32px;
+                border-radius: 50%;
+            }
         }
 
         .username {
@@ -509,12 +531,53 @@ const handleStart = () => {
             border-radius: 8px 8px 8px 8px;
             margin-left: 24px;
         }
+
+        .comment-btn {
+            display: none;
+        }
     }
 }
+.nav-tabs {
+    display: flex;
+    justify-content: center;
+    gap: 40px;
+    margin-bottom: 20px;
+
+    .nav-tab-item {
+        font-family: PingFang SC;
+        font-size: 16px;
+        font-weight: 500;
+        color: #999;
+        cursor: pointer;
+        padding-bottom: 6px;
+        position: relative;
+        transition: all 0.3s;
+
+        &.active {
+            color: #9e40ff;
+            font-weight: 600;
+
+            &::after {
+                content: "";
+                position: absolute;
+                bottom: 0;
+                left: 50%;
+                transform: translateX(-50%);
+                width: 24px;
+                height: 3px;
+                background: #9e40ff;
+                border-radius: 2px;
+            }
+        }
+    }
+}
+
 .home_content {
     display: flex;
     flex-direction: column;
     min-height: 0;
+    flex: 1;
+    overflow: hidden;
 }
 .content {
     margin: 0 auto;

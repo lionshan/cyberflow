@@ -712,6 +712,165 @@ async function closeCommentDialog() {
     }
     return true;
 }
+
+/**
+ * 获取当前页面推文内容
+ */
+export async function getPageTweetText(): Promise<string> {
+    try {
+        let needRetry = await checkNeedRetry();
+        if (!needRetry) {
+            throw new Error("页面加载失败，已点击重试按钮，请稍后");
+        }
+        await waitForElement('[data-testid="tweetText"]');
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        let contentDOM = document.querySelector('[data-testid="tweetText"]');
+        if (!contentDOM) {
+            throw new Error("未找到需要评论的节点");
+        }
+        let text = (contentDOM as HTMLElement).innerText;
+        if (text.length === 0) {
+            throw new Error("需要评论的节点内容为空");
+        }
+        return text;
+    } catch (error) {
+        throw new Error("获取推文内容失败: " + error.message);
+    }
+}
+
+/**
+ * 在当前页面发布评论回复
+ * @param replyContent 回复内容
+ */
+export async function publishReplyToCurrentPage(replyContent: string): Promise<boolean> {
+    try {
+        let replyButton = document.querySelector('button[data-testid="reply"]');
+        if (!replyButton) {
+            throw new Error("未找到回复按钮");
+        }
+
+        const clickReplyButtonEvent = new Event("click", { bubbles: true });
+        replyButton.dispatchEvent(clickReplyButtonEvent);
+        await waitForElement('div[data-viewportview="true"]');
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+
+        const editor = document.querySelector('div[data-contents="true"]');
+        if (!editor) {
+            console.log("未找到编辑器元素");
+            throw new Error("编辑器元素未找到");
+        }
+
+        if (!editor.closest('[role="dialog"]')) {
+            await new Promise((resolve) => setTimeout(resolve, 10000));
+            if (!editor.closest('[role="dialog"]')) {
+                throw new Error("回复对话框未打开");
+            }
+        }
+
+        // 聚焦编辑器
+        (editor as HTMLElement).focus();
+        // 使用 ClipboardEvent 粘贴文本
+        const pasteEvent = new ClipboardEvent("paste", {
+            bubbles: true,
+            cancelable: true,
+            clipboardData: new DataTransfer()
+        });
+        pasteEvent.clipboardData!.setData("text/plain", replyContent);
+        editor.dispatchEvent(pasteEvent);
+
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        //判断是否超长
+        let checkDOM = document.querySelector('[data-testid="countdown-circle"]');
+        if (checkDOM && checkDOM.children[2]) {
+            let num = (checkDOM.children[2] as HTMLElement).innerText;
+            if (Number(num) < 0) {
+                await closeCommentDialog();
+                throw new Error("评论内容过长，无法发送");
+            }
+        }
+
+        // 查找发布按钮
+        const allButtons = document.querySelectorAll("button");
+        const publishButton = Array.from(allButtons).find((button) => {
+            return ["Reply答", "Reply", "回复", "回覆"].includes(button.textContent || "");
+        });
+
+        console.log("sendButton", publishButton);
+
+        if (publishButton) {
+            // 如果找到发布按钮，检查是否可点击
+            let attempts = 0;
+            while (publishButton.disabled && attempts < 10) {
+                await new Promise((resolve) => setTimeout(resolve, 3000));
+                attempts++;
+                console.log(`Waiting for send button to be enabled. Attempt ${attempts}/10`);
+            }
+
+            if (publishButton.disabled) {
+                console.log("Send button is still disabled after 10 attempts");
+                throw new Error("Send button is still disabled after 10 attempts");
+            }
+
+            console.log("sendButton clicked");
+            const clickEvent = new Event("click", { bubbles: true });
+            publishButton.dispatchEvent(clickEvent);
+        } else {
+            // 如果没找到发布按钮，尝试使用快捷键发布
+            console.log("未找到'发送'按钮");
+            const keyEvent = new KeyboardEvent("keydown", {
+                bubbles: true,
+                cancelable: true,
+                key: "Enter",
+                code: "Enter",
+                keyCode: 13,
+                which: 13,
+                metaKey: true,
+                composed: true
+            });
+
+            // 再次聚焦编辑器并发送快捷键
+            (editor as HTMLElement).focus();
+            editor.dispatchEvent(keyEvent);
+            console.log("CMD+Enter 事件触发完成");
+        }
+
+        let toastDOM = await waitSendSuccess();
+        const successTexts = ["Your post was sent", "你的帖子已发送", "你的貼文已發送"];
+        const isSuccess = successTexts.some((text) => toastDOM.innerText.includes(text));
+
+        if (!isSuccess) {
+            await closeCommentDialog();
+            throw new Error("评论发送失败," + toastDOM.innerText);
+        }
+
+        // 上报已回复推文
+        try {
+            const currentUrl = window.location.href;
+            const tweetId = extractTweetIdFromUrl(currentUrl);
+            const userTwitterAccount = await selfLocalStorage.getItem("xUserName");
+
+            if (tweetId && userTwitterAccount) {
+                // 向 background 发送上报请求
+                browser.runtime.sendMessage({
+                    action: "reportReply",
+                    data: {
+                        userTwitterAccount: userTwitterAccount,
+                        tweetIds: [tweetId]
+                        // commentedUserTwitterAccount 可以从页面获取，暂时留空或根据需求添加
+                    }
+                });
+                console.log("上报已回复推文成功", tweetId);
+            }
+        } catch (reportError) {
+            console.error("上报已回复推文失败", reportError);
+            // 上报失败不影响主流程，仅记录日志
+        }
+
+        return true;
+    } catch (error) {
+        throw new Error("发布评论失败: " + error.message);
+    }
+}
 export async function MockCommentX(data: any) {
     // throw new Error("评论发送失败,测试");
     let retrtyCount = 0;
@@ -1009,5 +1168,167 @@ export async function MockSingleCommentX(data: any) {
     } catch (error) {
         await new Promise((resolve) => setTimeout(resolve, 2000));
         throw new Error("X 发布过程中出错3:" + error.message);
+    }
+}
+
+export async function MockOneClickCommentX(data: any) {
+    const { aiId } = data;
+    const processedIds = new Set<string>();
+    const MAX_COMMENTS = 10;
+
+    try {
+        console.log("MockOneClickCommentX start", aiId);
+        await selfLocalStorage.setItem("oneClickCommentStartTime", new Date().toISOString());
+
+        // 1. 回复当前页面推文 (主贴)
+        const mainText = await getPageTweetText();
+        browser.runtime.sendMessage({
+            action: "oneClickCommentStatus",
+            data: { log: `获取主贴内容: ${mainText.substring(0, 20)}...` }
+        });
+
+        const mainResponse = await browser.runtime.sendMessage({
+            action: "generateOneClickComment",
+            data: { aiId, tweetText: mainText }
+        });
+
+        if (mainResponse && mainResponse.canSend && mainResponse.replyContent) {
+            browser.runtime.sendMessage({
+                action: "oneClickCommentStatus",
+                data: { log: `主贴回复生成中...` }
+            });
+            await publishReplyToCurrentPage(mainResponse.replyContent);
+
+            // 记录主贴 ID
+            const mainId = extractTweetIdFromUrl(window.location.href);
+            if (mainId) processedIds.add(mainId);
+
+            browser.runtime.sendMessage({
+                action: "oneClickCommentStatus",
+                data: { log: `主贴回复成功` }
+            });
+        } else {
+            browser.runtime.sendMessage({
+                action: "oneClickCommentStatus",
+                data: { log: `主贴无需回复或获取失败，跳过` }
+            });
+        }
+
+        // 循环处理评论
+        let currentCount = 0;
+        while (currentCount < MAX_COMMENTS) {
+            // 2. 等待随机时间并滑动浏览
+            browser.runtime.sendMessage({
+                action: "oneClickCommentStatus",
+                data: { log: `浏览中...等待加载评论` }
+            });
+
+            const scrollAmount = Math.floor(Math.random() * 300) + 100;
+            window.scrollBy({ top: scrollAmount, behavior: "smooth" });
+            await new Promise((resolve) => setTimeout(resolve, Math.floor(Math.random() * 3000) + 2000));
+
+            // 3. 找到第一个未评论
+            await waitForElement('[data-testid="cellInnerDiv"]');
+            const articles = document.querySelectorAll('article[data-testid="tweet"]');
+            let commentNode: Element | null = null;
+
+            for (const article of Array.from(articles)) {
+                const link = article.querySelector('a[href*="/status/"]');
+                if (!link) continue;
+                const href = (link as HTMLAnchorElement).href;
+                // 排除 status 后面没有 ID 的情况 (e.g. /status/123/analytics)
+                const segments = href.split("/");
+                const statusIndex = segments.indexOf("status");
+                if (statusIndex === -1 || statusIndex + 1 >= segments.length) continue;
+
+                const id = segments[statusIndex + 1];
+                const isAnalytics = segments.length > statusIndex + 2 && segments[statusIndex + 2] === "analytics";
+                if (isAnalytics) continue;
+
+                if (id && !processedIds.has(id)) {
+                    // 简单跳过主贴（假设主贴在最上面，或者通过其他方式判断）
+                    // 如果是主贴，通常 href 等于 window.location.href
+                    // 这里严格判断 ID
+                    const currentUrlId = extractTweetIdFromUrl(window.location.href);
+                    if (id === currentUrlId) continue;
+
+                    commentNode = article;
+                    break;
+                }
+            }
+
+            if (!commentNode) {
+                // 尝试滚动更多
+                await scrollList();
+                continue;
+            }
+
+            // 获取 ID 并加入集合
+            const link = commentNode.querySelector('a[href*="/status/"]');
+            const id = extractTweetIdFromUrl((link as HTMLAnchorElement).href);
+            if (!id) continue;
+            processedIds.add(id);
+
+            // 4. 点击打开该评论
+            browser.runtime.sendMessage({
+                action: "oneClickCommentStatus",
+                data: { log: `打开详情: ${id}` }
+            });
+
+            (commentNode as HTMLElement).click();
+
+            // 等待页面加载
+            await new Promise((r) => setTimeout(r, 3000));
+            await waitForElement('[data-testid="tweetText"]');
+
+            try {
+                // 5. 回复该评论
+                const subText = await getPageTweetText();
+                const subResponse = await browser.runtime.sendMessage({
+                    action: "generateOneClickComment",
+                    data: { aiId, tweetText: subText }
+                });
+
+                if (subResponse && subResponse.canSend && subResponse.replyContent) {
+                    await publishReplyToCurrentPage(subResponse.replyContent);
+                    currentCount++;
+                    browser.runtime.sendMessage({
+                        action: "oneClickCommentStatus",
+                        data: { log: `回复子评论成功 (${currentCount}/${MAX_COMMENTS})` }
+                    });
+                }
+            } catch (innerError) {
+                console.error("回复子评论出错", innerError);
+                browser.runtime.sendMessage({
+                    action: "oneClickCommentStatus",
+                    data: { log: `回复子评论出错: ${innerError.message}` }
+                });
+            }
+
+            // 6. 等待随机时间并滑动
+            const scrollAmount2 = Math.floor(Math.random() * 300) + 100;
+            window.scrollBy({ top: scrollAmount2, behavior: "smooth" });
+            await new Promise((resolve) => setTimeout(resolve, Math.floor(Math.random() * 3000) + 2000));
+
+            // 7. 返回
+            window.history.back();
+            await new Promise((r) => setTimeout(r, 3000));
+            await waitForElement('[data-testid="tweetText"]');
+        }
+
+        browser.runtime.sendMessage({
+            action: "oneClickCommentStatus",
+            data: { status: "completed", log: `一键评论任务全部完成` }
+        });
+    } catch (error) {
+        console.error("oneClickComment error:", error);
+        browser.runtime.sendMessage({
+            action: "oneClickCommentStatus",
+            data: {
+                status: "error",
+                log: error.message || "执行出错"
+            }
+        });
+        await selfLocalStorage.removeItem("oneClick_isRunning");
     }
 }

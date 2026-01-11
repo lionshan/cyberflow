@@ -2,12 +2,10 @@
 declare const chrome: {
     storage: {
         local: {
-            get(
-                keys: string[],
-                callback: (result: { [key: string]: any }) => void
-            ): void;
+            get(keys: string[], callback: (result: { [key: string]: any }) => void): void;
             set(items: { [key: string]: any }, callback: () => void): void;
             remove(keys: string[], callback: () => void): void;
+            clear(callback: () => void): void;
         };
     };
 };
@@ -16,12 +14,9 @@ export const selfLocalStorage = {
     getItem(key: string): Promise<string | null> {
         return new Promise((resolve) => {
             if (typeof chrome !== "undefined" && chrome.storage) {
-                chrome.storage.local.get(
-                    [key],
-                    (result: { [key: string]: any }) => {
-                        resolve(result[key] || null);
-                    }
-                );
+                chrome.storage.local.get([key], (result: { [key: string]: any }) => {
+                    resolve(result[key] || null);
+                });
             } else {
                 resolve(localStorage.getItem(key));
             }
@@ -49,6 +44,18 @@ export const selfLocalStorage = {
                 return;
             } else {
                 localStorage.removeItem(key);
+                resolve();
+            }
+        });
+    },
+    clear(): Promise<void> {
+        return new Promise((resolve) => {
+            if (typeof chrome !== "undefined" && chrome.storage) {
+                chrome.storage.local.clear(() => {
+                    resolve();
+                });
+            } else {
+                localStorage.clear();
                 resolve();
             }
         });

@@ -18,6 +18,7 @@ export default defineBackground(() => {
             selfLocalStorage.removeItem("workflow");
         });
     };
+
     const openX = async () => {
         let xTab: any = await getXTab();
         (globalThis as any).tabId = xTab.id;
@@ -53,6 +54,26 @@ export default defineBackground(() => {
         const { missionId, tweetId, tweetText } = requestData;
         try {
             const res = await workflowApi.getReply(missionId, tweetText);
+            console.log("res", res);
+            if (res.code == 10014) {
+                //关闭这里应该重新登录
+                closeWorkflow();
+                sendResponse(false);
+            } else {
+                sendResponse(res.data);
+            }
+        } catch (error) {
+            sendResponse(error);
+        }
+        return true;
+    };
+    const generateOneClickComment = async (sendResponse: (response: any) => void, requestData: any) => {
+        const { aiId, tweetId, tweetText } = requestData;
+        try {
+            const res = await workflowApi.getReplyV2({
+                aiId: aiId,
+                content: tweetText
+            });
             console.log("res", res);
             if (res.code == 10014) {
                 //关闭这里应该重新登录
@@ -181,11 +202,31 @@ export default defineBackground(() => {
             }
         });
     });
+    const reportReply = (sendResponse: any, data: any) => {
+        console.log("Reporting reply:", data);
+        workflowApi
+            .reportReplyTweets(data)
+            .then((res) => {
+                console.log("Report reply success:", res);
+                sendResponse({ success: true, data: res });
+            })
+            .catch((err) => {
+                console.error("Report reply failed:", err);
+                sendResponse({ success: false, error: err.message });
+            });
+    };
+
     browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
         console.log("Message received in background:", request);
         switch (request.action) {
             case "generateComment":
                 generateComment(sendResponse, request.data);
+                return true;
+            case "reportReply":
+                reportReply(sendResponse, request.data);
+                return true;
+            case "generateOneClickComment":
+                generateOneClickComment(sendResponse, request.data);
                 return true;
             case "testFunction":
                 testFunction();

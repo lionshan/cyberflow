@@ -57,6 +57,118 @@ export interface LoginResponse {
     [key: string]: any;
 }
 
+// 一键评论/智能体请求参数
+export interface AgentQueryParams {
+    author?: string;
+    beginTime?: Date;
+    categoryId?: number;
+    endTime?: Date;
+    isOfficial?: boolean;
+    isPublic?: boolean;
+    nickname?: string;
+    orderColumn?: string;
+    orderDirection?: string;
+    pageNum?: number;
+    pageSize?: number;
+    published?: boolean;
+    timeRangeColumn?: string;
+    [property: string]: any;
+}
+
+// 一键评论/智能体数据项
+export interface AgentItem {
+    creatorId: number;
+    createTime: string;
+    updaterId: number;
+    updateTime: string;
+    deleted: boolean;
+    id: number;
+    nickname: string;
+    avatar: string;
+    kolId: string;
+    kolPrompt: string;
+    templateMeta: string;
+    author: string;
+    authorId: number;
+    price: number;
+    free: boolean;
+    editable: boolean;
+    usageNum: number;
+    details: string;
+    categoryId: number;
+    folderId: number;
+    orderNum: number;
+    isOfficial: boolean;
+    autoActive: boolean;
+    fileCount: number;
+    isPublic: boolean;
+    published: boolean;
+    recommendKeyword: string;
+}
+
+// 分页数据
+export interface PageData<T> {
+    total: number;
+    rows: T[];
+}
+
+// AI回复请求参数 (V2)
+export interface ReplyV2Params {
+    /**
+     * AI ID
+     */
+    aiId: number;
+    /**
+     * 需要被回复内容
+     */
+    content: string;
+    [property: string]: any;
+}
+
+// AI回复响应数据 (V2)
+export interface ReplyV2Response {
+    canSend: boolean;
+    replyContent: string;
+}
+
+// 上报已回复推文参数
+export interface ReportReplyTweetsParams {
+    /**
+     * 被回复用户推特账号
+     */
+    commentedUserTwitterAccount?: string;
+    /**
+     * 推文ID列表
+     */
+    tweetIds: string[];
+    /**
+     * 用户推特账号
+     */
+    userTwitterAccount: string;
+    [property: string]: any;
+}
+
+// 获取已回复推文列表参数
+export interface GetReplyTweetsParams {
+    /**
+     * 开始创建时间
+     */
+    beginCreateTime?: Date;
+    /**
+     * 被回复用户推特账号
+     */
+    commentedUserTwitterAccount?: string;
+    /**
+     * 结束创建时间
+     */
+    endCreateTime?: Date;
+    /**
+     * 用户推特账号
+     */
+    userTwitterAccount: string;
+    [property: string]: any;
+}
+
 const baseURL: string = import.meta.env.VITE_API_BASE_URL || "";
 
 // console.log("baseURLbaseURLbaseURLbaseURL", baseURL, import.meta.env);
@@ -325,10 +437,25 @@ export const workflowApi = {
         });
     },
 
+    /**
+     * 根据ai人设获取评论内容 V2
+     */
+    getReplyV2: (data: ReplyV2Params): Promise<ApiResponse<ReplyV2Response>> => {
+        return request.post<ReplyV2Response>(`/api/cyberflow/plugin/mission/reply-v2`, data);
+    },
+
     uploadLog: (data: any): Promise<ApiResponse<any>> => {
         return request.post<any>(`/api/cyberflow/plugin/log/log`, {
             ...data
         });
+    },
+
+    /**
+     * 获取一键评论/AI智能体列表
+     * @param params 查询参数
+     */
+    getAgentList: (params: AgentQueryParams): Promise<ApiResponse<PageData<AgentItem>>> => {
+        return request.get<PageData<AgentItem>>(`/api/cyberflow/ai/page`, params);
     }
 };
 
@@ -364,6 +491,21 @@ export const userApi = {
             account
         });
     },
+
+    /**
+     * 上报已回复推文
+     */
+    reportReplyTweets: (data: ReportReplyTweetsParams): Promise<ApiResponse<any>> => {
+        return request.post("/api/cyberflow/plugin/account/report-reply-tweets", data);
+    },
+
+    /**
+     * 获取已回复推文列表
+     */
+    getReplyTweets: (params: GetReplyTweetsParams): Promise<ApiResponse<string[]>> => {
+        return request.get<string[]>("/api/cyberflow/plugin/account/reply-tweets", params);
+    },
+
     /**
      * 获取用户信息
      * @returns Promise

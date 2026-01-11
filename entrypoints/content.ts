@@ -1,4 +1,6 @@
-import { DynamicX, MockCommentX, MockSingleCommentX } from "@/utils/x";
+import { DynamicX, MockCommentX, MockSingleCommentX, MockOneClickCommentX } from "@/utils/x";
+import { selfLocalStorage } from "@/utils/storage";
+
 export default defineContentScript({
     matches: ["*://x.com/*?cybeflow=true*", "*://x.com/i/lists/*?cybeflow=true*", "*://x.com/compose/post", "*://x.com/*/status/*"],
     runAt: "document_start",
@@ -48,6 +50,10 @@ export default defineContentScript({
                 sendResponse({ task: data, result: error.message });
             }
         };
+        const oneClickComment = async (data: any, sendResponse: (response: any) => void) => {
+            console.log("oneClickComment data", data);
+            await MockOneClickCommentX(data);
+        };
         console.log("Hello content.");
         browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
             console.log("Message received in content script:", request);
@@ -69,6 +75,9 @@ export default defineContentScript({
                 case "changeTabUrl":
                     sendResponse({ result: "changeTabUrlSuccess" });
                     window.location.href = request.data.url;
+                    return true;
+                case "oneClickComment":
+                    oneClickComment(request.data, sendResponse);
                     return true;
                 default:
                     console.log("Unknown action:", request.action);

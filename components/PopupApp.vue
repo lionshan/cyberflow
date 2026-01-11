@@ -1,6 +1,6 @@
 <template>
     <div class="popup_wrapper" v-loading="loading">
-        <div @click="testClick">测试接口</div>
+        <!-- <div @click="testClick">测试接口</div> -->
         <el-alert style="cursor: pointer" v-if="versionTitle != ''" :title="versionTitle" type="warning" @click="openChromeWebStore" />
         <Login v-if="showPage == 'login'" ref="logoRef" @submit="onLogin" />
         <!-- <WorkFlow
@@ -222,10 +222,14 @@ const onLogout = () => {
                 message: "登出成功",
                 type: "success"
             });
-            selfLocalStorage.removeItem("token").then(() => {
-                console.log("Token removed from local storage");
+            selfLocalStorage.clear().then(() => {
+                console.log("Local storage cleared");
                 showPage.value = "login";
             });
+            // selfLocalStorage.removeItem("token").then(() => {
+            //     console.log("Token removed from local storage");
+            //     showPage.value = "login";
+            // });
         })
         .catch((error) => {
             console.error("Error during logout:", error);
