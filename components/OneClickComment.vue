@@ -12,6 +12,7 @@
                 <el-button type="primary" class="action-btn" color="#9e40ff" :loading="isRunning" :disabled="!selectedAgentId && !isRunning" @click="toggleRun">
                     {{ isRunning ? "运行中" : "一键回复" }}
                 </el-button>
+                <el-button v-if="isRunning" type="primary" class="action-btn" color="#9e40ff" @click="clickStopLoading"> 停止 </el-button>
             </div>
         </div>
 
@@ -55,6 +56,7 @@ const emit = defineEmits<{
     (e: "start", agentId: string | number): void;
     (e: "stop"): void;
     (e: "back"): void;
+    (e: "stopOneClickComment"): void;
 }>();
 
 interface ExtendedAgentOption extends AgentOption {
@@ -132,6 +134,9 @@ const stopLoading = () => {
     addLog("任务结束", "info");
 };
 
+const clickStopLoading = () => {
+    emit("stopOneClickComment");
+};
 const handleMessage = (message: any) => {
     if (message.action === "oneClickCommentStatus") {
         const { status, log } = message.data || {};
@@ -142,7 +147,7 @@ const handleMessage = (message: any) => {
             stopLoading();
             ElMessage.success("一键评论任务完成");
         } else if (status === "error") {
-            stopLoading();
+            // stopLoading();
             ElMessage.error(log || "一键评论任务出错");
         }
     }
@@ -296,8 +301,10 @@ defineExpose({
 
     .action-area {
         margin-bottom: 24px;
+        width: 100%;
+        display: flex;
         .action-btn {
-            width: 100%;
+            flex: 1;
             height: 40px;
             font-size: 16px;
             font-weight: 500;

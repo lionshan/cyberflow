@@ -7,11 +7,8 @@ export default defineConfig({
         startUrls: ["https://x.com/home"]
     },
     manifest: {
-        permissions: ["storage", "alarms"],
-        host_permissions: [
-            "https://cyberflow.info/*",
-            "http://testkolabc.cyberflow.info/*"
-        ],
+        permissions: ["storage", "alarms", "tabs"],
+        host_permissions: ["https://cyberflow.info/*", "http://testkolabc.cyberflow.info/*"],
         name: "Cyberflow"
     }
 });

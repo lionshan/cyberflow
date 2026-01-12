@@ -1,4 +1,4 @@
-import { DynamicX, MockCommentX, MockSingleCommentX, MockOneClickCommentX } from "@/utils/x";
+import { DynamicX, MockCommentX, MockSingleCommentX, MockOneClickCommentX, stopMockOneClickCommentX } from "@/utils/x";
 import { selfLocalStorage } from "@/utils/storage";
 
 export default defineContentScript({
@@ -78,6 +78,10 @@ export default defineContentScript({
                     return true;
                 case "oneClickComment":
                     oneClickComment(request.data, sendResponse);
+                    return true;
+                case "stopOneClickComment":
+                    stopMockOneClickCommentX();
+                    sendResponse({ result: true });
                     return true;
                 default:
                     console.log("Unknown action:", request.action);

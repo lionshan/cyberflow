@@ -1171,12 +1171,20 @@ export async function MockSingleCommentX(data: any) {
     }
 }
 
+let isStopOneClick = false;
+
+export function stopMockOneClickCommentX() {
+    isStopOneClick = true;
+}
+
 export async function MockOneClickCommentX(data: any) {
     const { aiId } = data;
     const processedIds = new Set<string>();
     const MAX_COMMENTS = 10;
+    isStopOneClick = false;
 
     try {
+        if (isStopOneClick) throw new Error("任务已停止");
         console.log("MockOneClickCommentX start", aiId);
         await selfLocalStorage.setItem("oneClickCommentStartTime", new Date().toISOString());
 
@@ -1217,6 +1225,7 @@ export async function MockOneClickCommentX(data: any) {
         // 循环处理评论
         let currentCount = 0;
         while (currentCount < MAX_COMMENTS) {
+            if (isStopOneClick) throw new Error("任务已停止");
             // 2. 等待随机时间并滑动浏览
             browser.runtime.sendMessage({
                 action: "oneClickCommentStatus",
@@ -1226,6 +1235,7 @@ export async function MockOneClickCommentX(data: any) {
             const scrollAmount = Math.floor(Math.random() * 300) + 100;
             window.scrollBy({ top: scrollAmount, behavior: "smooth" });
             await new Promise((resolve) => setTimeout(resolve, Math.floor(Math.random() * 3000) + 2000));
+            if (isStopOneClick) throw new Error("任务已停止");
 
             // 3. 找到第一个未评论
             await waitForElement('[data-testid="cellInnerDiv"]');
@@ -1279,6 +1289,7 @@ export async function MockOneClickCommentX(data: any) {
 
             // 等待页面加载
             await new Promise((r) => setTimeout(r, 3000));
+            if (isStopOneClick) throw new Error("任务已停止");
             await waitForElement('[data-testid="tweetText"]');
 
             try {
@@ -1313,6 +1324,7 @@ export async function MockOneClickCommentX(data: any) {
             // 7. 返回
             window.history.back();
             await new Promise((r) => setTimeout(r, 3000));
+            if (isStopOneClick) throw new Error("任务已停止");
             await waitForElement('[data-testid="tweetText"]');
         }
 

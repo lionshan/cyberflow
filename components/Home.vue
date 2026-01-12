@@ -101,7 +101,7 @@
                 </div>
             </template>
             <!-- 一键评论区域 -->
-            <OneClickComment ref="oneClickCommentRef" @start="startOnClickComment" v-if="activeTab === 'comment'" :curUserName="userData?.nickname" />
+            <OneClickComment ref="oneClickCommentRef" @start="startOnClickComment" @stopOneClickComment="stopOneClickComment" v-if="activeTab === 'comment'" :curUserName="userData?.nickname" />
         </div>
         <HomeWorkFlow :workflowList="workflows" :selectList="selectflows" v-if="showContent === 'workflow'" @confirm="backHome" />
     </div>
@@ -109,7 +109,7 @@
 
 <script lang="ts" setup>
 const webURL: string = import.meta.env.VITE_API_WEB_URL || "";
-import { ref, onMounted, computed, watch } from "vue";
+import { ref, onMounted, onUnmounted, computed, watch } from "vue";
 import { workflowApi } from "../api/api";
 import HomeWorkFlow from "@/components/HomeWorkFlow.vue";
 import OneClickComment from "@/components/OneClickComment.vue";
@@ -153,10 +153,13 @@ const showWorkflowName = computed(() => {
 const reverseLogs = computed(() => {
     return logs.value.slice().reverse();
 });
-watch(props.workflowData, (data) => {
-    console.log("当前页面:", data);
-    selectflows.value = props.workflowData || [];
-});
+watch(
+    () => props.workflowData,
+    (data) => {
+        console.log("当前页面:", data);
+        selectflows.value = props.workflowData || [];
+    }
+);
 onMounted(() => {
     //检查登录账号
     checkX();
@@ -170,10 +173,26 @@ onUnmounted(() => {
         logTimer = null;
     }
 });
+const closeOneClick = () => {
+    if (oneClickCommentRef.value && oneClickCommentRef.value.stopLoading) {
+        oneClickCommentRef.value.stopLoading();
+    }
+};
+const stopOneClickComment = async () => {
+    let tabId = await selfLocalStorage.getItem("oneClickCommenttabId");
+    if (!!tabId) {
+        browser.tabs.sendMessage(Number(tabId), {
+            action: "stopOneClickComment"
+        });
+    }
+};
 const startOnClickComment = (aiId: string | number) => {
     browser.tabs.query({ active: true, currentWindow: true }, (tabs: any) => {
         const tab = tabs[0];
+        console.log("tabtabtabtab", tab);
         if (!tab || !tab.id || !tab.url) {
+            ElMessage.warning("请在推文详情页下使用一键评论功能1");
+            closeOneClick();
             return;
         }
 
@@ -181,15 +200,14 @@ const startOnClickComment = (aiId: string | number) => {
         // 简单正则匹配
         const isXStatusPage = /^https?:\/\/x\.com\/[^/]+\/status\/[^/]+/.test(tab.url);
         if (!isXStatusPage) {
-            ElMessage.warning("请在推文详情页下使用一键评论功能");
+            ElMessage.warning("请在推文详情页下使用一键评论功能2");
             // 可选：在这里如果需要停止 OneClickComment 组件的 loading 状态，可能需要 emitting 一个事件或者调用引用方法
             // 但目前的结构是通过 refs 调用子组件方法较为复杂，暂时只提示
-            if (oneClickCommentRef.value && oneClickCommentRef.value.stopLoading) {
-                oneClickCommentRef.value.stopLoading();
-            }
+            closeOneClick();
             return;
         }
         const tabId = tab.id;
+        selfLocalStorage.setItem("oneClickCommenttabId", tabId);
         // 2. 将aiId数据发送给对应tabId的页面
         // 3. 调用action: "oneClickComment"
         browser.tabs.sendMessage(tabId, {
