@@ -2,7 +2,7 @@ import { DynamicX, MockCommentX, MockSingleCommentX, MockOneClickCommentX, stopM
 import { selfLocalStorage } from "@/utils/storage";
 
 export default defineContentScript({
-    matches: ["*://x.com/*?cybeflow=true*", "*://x.com/i/lists/*?cybeflow=true*", "*://x.com/compose/post", "*://x.com/*/status/*"],
+    matches: ["*://x.com/*"],
     runAt: "document_start",
     main() {
         const publishX = async (data: any, sendResponse: (response: any) => void) => {
@@ -50,7 +50,7 @@ export default defineContentScript({
                 sendResponse({ task: data, result: error.message });
             }
         };
-        const oneClickComment = async (data: any, sendResponse: (response: any) => void) => {
+        const oneClickComment = async (data: any) => {
             console.log("oneClickComment data", data);
             await MockOneClickCommentX(data);
         };
@@ -77,8 +77,8 @@ export default defineContentScript({
                     window.location.href = request.data.url;
                     return true;
                 case "oneClickComment":
-                    oneClickComment(request.data, sendResponse);
-                    return true;
+                    oneClickComment(request.data);
+                    return false;
                 case "stopOneClickComment":
                     stopMockOneClickCommentX();
                     sendResponse({ result: true });

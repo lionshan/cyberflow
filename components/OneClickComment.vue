@@ -135,6 +135,7 @@ const stopLoading = () => {
 };
 
 const clickStopLoading = () => {
+    stopLoading();
     emit("stopOneClickComment");
 };
 const handleMessage = (message: any) => {
@@ -147,7 +148,7 @@ const handleMessage = (message: any) => {
             stopLoading();
             ElMessage.success("一键评论任务完成");
         } else if (status === "error") {
-            // stopLoading();
+            clickStopLoading();
             ElMessage.error(log || "一键评论任务出错");
         }
     }
@@ -163,25 +164,25 @@ onMounted(async () => {
     const startTimeStr = await selfLocalStorage.getItem("oneClickCommentStartTime");
     const xUserName = await selfLocalStorage.getItem("xUserName");
 
-    if (startTimeStr && xUserName) {
-        try {
-            console.log("Fetching history logs...", startTimeStr);
-            const res = await userApi.getReplyTweets({
-                userTwitterAccount: xUserName,
-                beginCreateTime: new Date(startTimeStr),
-                endCreateTime: new Date()
-            });
-            if (res.data && Array.isArray(res.data)) {
-                res.data.forEach((tweet: string) => {
-                    // Check if already in logs to avoid duplicate if running?
-                    // But onMount logs are empty usually.
-                    addLog(`[历史] 已回复: ${tweet}`, "success");
-                });
-            }
-        } catch (e) {
-            console.error("Fetch history failed", e);
-        }
-    }
+    // if (startTimeStr && xUserName) {
+    //     try {
+    //         console.log("Fetching history logs...", startTimeStr);
+    //         const res = await userApi.getReplyTweets({
+    //             userTwitterAccount: xUserName,
+    //             beginCreateTime: new Date(startTimeStr),
+    //             endCreateTime: new Date()
+    //         });
+    //         if (res.data && Array.isArray(res.data)) {
+    //             res.data.forEach((tweet: string) => {
+    //                 // Check if already in logs to avoid duplicate if running?
+    //                 // But onMount logs are empty usually.
+    //                 addLog(`[历史] 已回复: ${tweet}`, "success");
+    //             });
+    //         }
+    //     } catch (e) {
+    //         console.error("Fetch history failed", e);
+    //     }
+    // }
 
     const savedAgentId = await selfLocalStorage.getItem("oneClick_selectedAgentId");
     if (savedAgentId) {

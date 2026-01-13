@@ -210,12 +210,16 @@ const startOnClickComment = (aiId: string | number) => {
         selfLocalStorage.setItem("oneClickCommenttabId", tabId);
         // 2. 将aiId数据发送给对应tabId的页面
         // 3. 调用action: "oneClickComment"
-        browser.tabs.sendMessage(tabId, {
-            action: "oneClickComment",
-            data: {
-                aiId: aiId
-            }
-        });
+        browser.tabs
+            .sendMessage(tabId, {
+                action: "oneClickComment",
+                data: {
+                    aiId: aiId
+                }
+            })
+            .catch((error) => {
+                console.log("一键点击错误", error);
+            });
     });
 };
 const checkLogs = () => {
