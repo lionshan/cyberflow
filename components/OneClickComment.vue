@@ -12,7 +12,7 @@
                 <el-button type="primary" class="action-btn" color="#9e40ff" :loading="isRunning" :disabled="!selectedAgentId && !isRunning" @click="toggleRun">
                     {{ isRunning ? "运行中" : "一键回复" }}
                 </el-button>
-                <el-button v-if="isRunning" type="primary" class="action-btn" color="#9e40ff" @click="clickStopLoading"> 停止 </el-button>
+                <el-button v-if="isRunning" type="primary" class="action-btn" color="#9e40ff" @click="stopLoading"> 停止 </el-button>
             </div>
         </div>
 
@@ -131,12 +131,8 @@ const addLog = (message: string, type: "info" | "success" | "error" = "info") =>
 
 const stopLoading = () => {
     isRunning.value = false;
-    addLog("任务结束", "info");
-};
-
-const clickStopLoading = () => {
-    stopLoading();
     emit("stopOneClickComment");
+    addLog("任务结束", "info");
 };
 const handleMessage = (message: any) => {
     if (message.action === "oneClickCommentStatus") {
@@ -148,7 +144,7 @@ const handleMessage = (message: any) => {
             stopLoading();
             ElMessage.success("一键评论任务完成");
         } else if (status === "error") {
-            clickStopLoading();
+            stopLoading();
             ElMessage.error(log || "一键评论任务出错");
         }
     }
@@ -254,8 +250,14 @@ const toggleRun = () => {
         ElMessage.warning("请先选择 AI 智能体");
         return;
     }
-
-    startTask();
+    //检测是否正则运行普通工作流
+    selfLocalStorage.getItem("jobId").then((curJobId) => {
+        if (curJobId) {
+            ElMessage.warning("当前有正在运行的工作流，请先停止");
+            return;
+        }
+        startTask();
+    });
 };
 
 const startTask = () => {

@@ -1,6 +1,6 @@
 import { selfLocalStorage } from "@/utils/storage";
 import { logInfo } from "@/utils/logs";
-import { workflowApi } from "@/api/api";
+import { workflowApi, userApi } from "@/api/api";
 import { sendMessageWithRetry } from "@/utils/sendMessageRetry";
 let timeroutHandle: any = null;
 let taskState = "idle"; // 'idle' | 'processing'
@@ -204,7 +204,7 @@ export default defineBackground(() => {
     });
     const reportReply = (sendResponse: any, data: any) => {
         console.log("Reporting reply:", data);
-        workflowApi
+        userApi
             .reportReplyTweets(data)
             .then((res) => {
                 console.log("Report reply success:", res);

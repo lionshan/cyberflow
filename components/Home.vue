@@ -184,6 +184,7 @@ const stopOneClickComment = async () => {
         browser.tabs.sendMessage(Number(tabId), {
             action: "stopOneClickComment"
         });
+        selfLocalStorage.removeItem("oneClickCommenttabId");
     }
 };
 const startOnClickComment = (aiId: string | number) => {
@@ -258,31 +259,37 @@ const startJob = () => {
         ElMessage.warning("请先选择工作流");
         return;
     }
+    //检测是否有正在运行一键回复功能
+    selfLocalStorage.getItem("oneClickCommenttabId").then((tabId) => {
+        if (tabId) {
+            ElMessage.warning("当前有正在运行的一键回复功能，请先停止或等待运行完成");
+            return;
+        }
+        //开启任务
+        loading.value = true;
+        workflowApi
+            .startWorkFlows(
+                props.xData?.accountId,
+                selectflows.value.map((item) => item.id || 0)
+            )
+            .then(async (response) => {
+                console.log("Start workflow response:", response);
+                jobId.value = response.data;
+                await selfLocalStorage.setItem("jobId", response.data);
 
-    //开启任务
-    loading.value = true;
-    workflowApi
-        .startWorkFlows(
-            props.xData?.accountId,
-            selectflows.value.map((item) => item.id || 0)
-        )
-        .then(async (response) => {
-            console.log("Start workflow response:", response);
-            jobId.value = response.data;
-            await selfLocalStorage.setItem("jobId", response.data);
-
-            ElMessage.success("工作流已启动");
-            browser.runtime.sendMessage({
-                action: "startWork"
+                ElMessage.success("工作流已启动");
+                browser.runtime.sendMessage({
+                    action: "startWork"
+                });
+            })
+            .catch((error) => {
+                console.error("Error starting workflow:", error);
+                ElMessage.error("启动工作流失败，请稍后重试");
+            })
+            .finally(() => {
+                loading.value = false;
             });
-        })
-        .catch((error) => {
-            console.error("Error starting workflow:", error);
-            ElMessage.error("启动工作流失败，请稍后重试");
-        })
-        .finally(() => {
-            loading.value = false;
-        });
+    });
 };
 const stopJob = () => {
     if (jobId.value === "") {

@@ -1,4 +1,4 @@
-import { DynamicX, MockCommentX, MockSingleCommentX, MockOneClickCommentX, stopMockOneClickCommentX } from "@/utils/x";
+import { DynamicX, MockCommentX, MockSingleCommentX, MockOneClickCommentX, MockInteractCommentersX, stopMockOneClickCommentX } from "@/utils/x";
 import { selfLocalStorage } from "@/utils/storage";
 
 export default defineContentScript({
@@ -52,7 +52,7 @@ export default defineContentScript({
         };
         const oneClickComment = async (data: any) => {
             console.log("oneClickComment data", data);
-            await MockOneClickCommentX(data);
+            await MockInteractCommentersX(data);
         };
         console.log("Hello content.");
         browser.runtime.onMessage.addListener((request, sender, sendResponse) => {

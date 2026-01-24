@@ -216,16 +216,23 @@ const onLogin = (name, pass) => {
 const onLogout = () => {
     userApi
         .logout()
-        .then(() => {
+        .then(async () => {
             console.log("Logout successful");
             ElMessage({
                 message: "登出成功",
                 type: "success"
             });
+            let tabId = await selfLocalStorage.getItem("oneClickCommenttabId");
+            if (!!tabId) {
+                browser.tabs.sendMessage(Number(tabId), {
+                    action: "stopOneClickComment"
+                });
+            }
             selfLocalStorage.clear().then(() => {
                 console.log("Local storage cleared");
                 showPage.value = "login";
             });
+
             // selfLocalStorage.removeItem("token").then(() => {
             //     console.log("Token removed from local storage");
             //     showPage.value = "login";

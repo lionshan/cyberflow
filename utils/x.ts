@@ -851,15 +851,15 @@ export async function publishReplyToCurrentPage(replyContent: string, commentNod
 
             if (tweetId && userTwitterAccount) {
                 // 向 background 发送上报请求
-                browser.runtime.sendMessage({
-                    action: "reportReply",
-                    data: {
-                        userTwitterAccount: userTwitterAccount,
-                        tweetIds: [tweetId]
-                        // commentedUserTwitterAccount 可以从页面获取，暂时留空或根据需求添加
-                    }
-                });
-                console.log("上报已回复推文成功", tweetId);
+                // browser.runtime.sendMessage({
+                //     action: "reportReply",
+                //     data: {
+                //         userTwitterAccount: userTwitterAccount,
+                //         tweetIds: [tweetId]
+                //         // commentedUserTwitterAccount 可以从页面获取，暂时留空或根据需求添加
+                //     }
+                // });
+                // console.log("上报已回复推文成功", tweetId);
             }
         } catch (reportError) {
             console.error("上报已回复推文失败", reportError);
@@ -987,15 +987,15 @@ export async function publishReplyToListPage(replyContent: string): Promise<bool
 
             if (tweetId && userTwitterAccount) {
                 // 向 background 发送上报请求
-                browser.runtime.sendMessage({
-                    action: "reportReply",
-                    data: {
-                        userTwitterAccount: userTwitterAccount,
-                        tweetIds: [tweetId]
-                        // commentedUserTwitterAccount 可以从页面获取，暂时留空或根据需求添加
-                    }
-                });
-                console.log("上报已回复推文成功", tweetId);
+                // browser.runtime.sendMessage({
+                //     action: "reportReply",
+                //     data: {
+                //         userTwitterAccount: userTwitterAccount,
+                //         tweetIds: [tweetId]
+                //         // commentedUserTwitterAccount 可以从页面获取，暂时留空或根据需求添加
+                //     }
+                // });
+                // console.log("上报已回复推文成功", tweetId);
             }
         } catch (reportError) {
             console.error("上报已回复推文失败", reportError);
@@ -1475,6 +1475,411 @@ export async function MockOneClickCommentX(data: any) {
             data: {
                 status: "error",
                 log: error.message || "执行出错"
+            }
+        });
+        await selfLocalStorage.removeItem("oneClick_isRunning");
+    }
+}
+function extractUserNameFromUrl(url: string): string | null {
+    // 匹配 x.com/用户名 或 twitter.com/用户名，兼容后续路径
+    const match = url.match(/(?:x|twitter)\.com\/([^\/]+)/);
+    return match ? match[1] : null;
+}
+export async function MockInteractCommentersX(data: any) {
+    const { aiId } = data;
+    const processedUsers = new Set<string>();
+    const MAX_USERS = 10;
+
+    // Load self username to exclude
+    const myUserName = await selfLocalStorage.getItem("xUserName");
+    if (myUserName) {
+        processedUsers.add(myUserName);
+        // exclude also simple string
+        processedUsers.add(`/${myUserName}`);
+    }
+
+    //获取主贴 name排除掉
+    const mainTweetUserName = await extractUserNameFromUrl(window.location.href);
+    if (mainTweetUserName) {
+        processedUsers.add(mainTweetUserName);
+        // exclude also simple string
+        processedUsers.add(`/${mainTweetUserName}`);
+    }
+    // Reset stop flag for this session? Or assume it's shared global `isStopOneClick`.
+    // It seems `isStopOneClick` is global in this module.
+    // We should probably reset it or ensure it's false at start.
+    isStopOneClick = false;
+
+    try {
+        console.log("MockInteractCommentersX start", aiId);
+        if (isStopOneClick) throw new Error("任务已停止");
+        await selfLocalStorage.setItem("interactCommentersStartTime", new Date().toISOString());
+
+        // 1. 记录主贴页面，并回复主贴
+        browser.runtime.sendMessage({
+            action: "oneClickCommentStatus",
+            data: { log: `开始任务：回复主贴中...` }
+        });
+
+        const mainText = await getPageTweetText(document);
+        // Reply Main Tweet
+        try {
+            const mainResponse = await browser.runtime.sendMessage({
+                action: "generateOneClickComment",
+                data: { aiId, tweetText: mainText }
+            });
+
+            if (mainResponse && mainResponse.replyContent) {
+                await publishReplyToCurrentPage(mainResponse.replyContent, document);
+                browser.runtime.sendMessage({
+                    action: "oneClickCommentStatus",
+                    data: { log: `主贴回复成功` }
+                });
+            } else {
+                browser.runtime.sendMessage({
+                    action: "oneClickCommentStatus",
+                    data: { log: `主贴无需回复或获取失败，跳过` }
+                });
+            }
+        } catch (e) {
+            console.error("Main tweet reply failed", e);
+            browser.runtime.sendMessage({
+                action: "oneClickCommentStatus",
+                data: { log: `主贴回复出错: ${e.message}` }
+            });
+        }
+
+        let currentCount = 0;
+
+        while (currentCount < MAX_USERS) {
+            if (isStopOneClick) throw new Error("任务已停止");
+
+            // 2. 滑动并寻找评论区的用户 (持续滚动直到找到未处理的用户)
+            browser.runtime.sendMessage({
+                action: "oneClickCommentStatus",
+                data: { log: `寻找第 ${currentCount + 1} 个用户...` }
+            });
+
+            let targetUserLink: HTMLAnchorElement | null = null;
+            let targetUserName = "";
+            let scrollAttempts = 0;
+            const maxScrollAttempts = 20;
+            let noScrollChangeCount = 0;
+
+            while (!targetUserLink && scrollAttempts < maxScrollAttempts) {
+                const startScrollTop = document.documentElement.scrollTop || document.body.scrollTop;
+                scrollAttempts++;
+
+                // 持续向下滚动
+                const scrollAmount = Math.floor(Math.random() * 300) + 500;
+                window.scrollBy({ top: scrollAmount, behavior: "smooth" });
+                await new Promise((resolve) => setTimeout(resolve, 1500));
+
+                if (isStopOneClick) throw new Error("任务已停止");
+
+                const endScrollTop = document.documentElement.scrollTop || document.body.scrollTop;
+                if (Math.abs(endScrollTop - startScrollTop) < 1) {
+                    noScrollChangeCount++;
+                } else {
+                    noScrollChangeCount = 0;
+                }
+
+                if (noScrollChangeCount >= 3) {
+                    break;
+                }
+
+                // 查询所有评论中的用户
+                const articles = Array.from(document.querySelectorAll('article[data-testid="tweet"]'));
+
+                for (const article of articles) {
+                    // Find user link
+                    const userLinkDiv = article.querySelector('div[data-testid="User-Name"]');
+                    if (!userLinkDiv) continue;
+
+                    // 获取 User-Name 区块内的链接
+                    const links = userLinkDiv.querySelectorAll('a[href^="/"]');
+                    for (const link of Array.from(links)) {
+                        const href = link.getAttribute("href");
+                        if (!href) continue;
+
+                        // 过滤掉状态链接、话题标签等
+                        if (href.includes("/status/")) continue;
+
+                        // 必须是用户个人资料链接，通常格式为 /username
+                        const segments = href.split("/").filter(Boolean);
+                        if (segments.length !== 1) continue;
+
+                        const possibleUser = segments[0];
+
+                        // 检查是否已处理过
+                        if (!processedUsers.has(possibleUser)) {
+                            targetUserLink = link as HTMLAnchorElement;
+                            targetUserName = possibleUser;
+                            break;
+                        }
+                    }
+                    if (targetUserLink) break;
+                }
+            }
+
+            if (noScrollChangeCount >= 3) {
+                browser.runtime.sendMessage({
+                    action: "oneClickCommentStatus",
+                    data: { log: `页面已滚动到底部，任务提前结束` }
+                });
+                break;
+            }
+
+            if (!targetUserLink) {
+                // 达到最大滚动次数仍未找到新用户，结束任务
+                browser.runtime.sendMessage({
+                    action: "oneClickCommentStatus",
+                    data: { log: `达到最大查找次数仍未找到新用户，任务结束` }
+                });
+                break;
+            }
+
+            // Found a user
+            processedUsers.add(targetUserName);
+
+            // 3. 点击用户头像/名字进入 Home 页
+            browser.runtime.sendMessage({
+                action: "oneClickCommentStatus",
+                data: { log: `访问用户: ${targetUserName}` }
+            });
+            targetUserLink.click();
+
+            // Wait for navigation
+            await new Promise((r) => setTimeout(r, 4000));
+            if (isStopOneClick) throw new Error("任务已停止");
+
+            // Wait for Tweets to load
+            try {
+                // await waitForElement('[data-testid="tweetText"]', 10000);
+                // User might not have tweets, or private.
+                // We wait for primary column
+                await waitForElement('[data-testid="primaryColumn"]');
+            } catch (e) {
+                console.log("Timeout waiting for user page, going back");
+                const backButton = document.querySelector('[aria-label="Back"]');
+                if (backButton) {
+                    (backButton as HTMLElement).click();
+                } else {
+                    window.history.back();
+                }
+
+                await new Promise((r) => setTimeout(r, 2000));
+
+                if (document.querySelector('[data-testid="twc-cc-mask"]')) {
+                    await closeCommentDialog();
+                    const closeBtn = document.querySelector('[aria-label="Close"]');
+                    if (closeBtn) (closeBtn as HTMLElement).click();
+                    await new Promise((r) => setTimeout(r, 1000));
+
+                    if (backButton) {
+                        (backButton as HTMLElement).click();
+                    } else {
+                        window.history.back();
+                    }
+                }
+
+                await new Promise((r) => setTimeout(r, 3000));
+                continue;
+            }
+
+            // 4. 获取最新一条帖子 (排除置顶，且必须是该用户自己发送的)
+            // Re-query articles on the new page
+            const userTweets = Array.from(document.querySelectorAll('article[data-testid="tweet"]'));
+            let targetTweet: Element | null = null;
+
+            for (const tweet of userTweets) {
+                // Check for Pinned
+                // Inspect standard structure for "Pinned" text or icon
+                // data-testid="socialContext" usually contains "Pinned"
+                const socialContext = tweet.querySelector('[data-testid="socialContext"]');
+                const isPinned = socialContext && (socialContext.textContent?.includes("Pinned") || socialContext.textContent?.includes("置顶") || socialContext.textContent?.includes("固定"));
+
+                if (isPinned) continue;
+
+                // 检查是否为用户本人发送 (排除转推)
+                const userNameNode = tweet.querySelector('[data-testid="User-Name"]');
+                if (!userNameNode) continue;
+
+                // 检查 User-Name 区块内的链接是否指向目标用户
+                // 目标用户的 handle 应该是 /targetUserName
+                const isAuthor = Array.from(userNameNode.querySelectorAll("a")).some((link) => {
+                    const href = link.getAttribute("href");
+                    return href && href.toLowerCase() === `/${targetUserName.toLowerCase()}`;
+                });
+
+                if (isAuthor) {
+                    targetTweet = tweet;
+                    break;
+                }
+            }
+
+            if (targetTweet) {
+                // 5. 回复这条帖子
+                browser.runtime.sendMessage({
+                    action: "oneClickCommentStatus",
+                    data: { log: `正在回复用户 ${targetUserName} 的最新推文...` }
+                });
+
+                try {
+                    // Scroll to tweet
+                    targetTweet.scrollIntoView({ block: "center", behavior: "smooth" });
+                    await new Promise((r) => setTimeout(r, 2000));
+
+                    // Click Reply Button inside targetTweet
+                    const replyBtn = targetTweet.querySelector('button[data-testid="reply"]');
+                    if (replyBtn) {
+                        const clickReplyButtonEvent = new Event("click", { bubbles: true });
+                        replyBtn.dispatchEvent(clickReplyButtonEvent);
+
+                        await waitForElement('div[data-viewportview="true"]'); // details modal or composer
+                        await new Promise((r) => setTimeout(r, 2000));
+
+                        // a. Get Text
+                        // targetTweet contains tweetText.
+                        const tweetTextNode = targetTweet.querySelector('[data-testid="tweetText"]');
+                        const tweetContent = (tweetTextNode as HTMLElement)?.innerText || "";
+
+                        if (tweetContent) {
+                            browser.runtime.sendMessage({
+                                action: "oneClickCommentStatus",
+                                data: { log: `生成回复内容中...` }
+                            });
+                            // b. Generate Reply
+                            const aiResponse = await browser.runtime.sendMessage({
+                                action: "generateOneClickComment",
+                                data: { aiId, tweetText: tweetContent }
+                            });
+
+                            if (aiResponse && aiResponse.replyContent) {
+                                // Now we are already in reply modal because we clicked?
+                                const editor = document.querySelector('div[data-contents="true"]');
+                                if (editor) {
+                                    (editor as HTMLElement).focus();
+                                    const pasteEvent = new ClipboardEvent("paste", {
+                                        bubbles: true,
+                                        cancelable: true,
+                                        clipboardData: new DataTransfer()
+                                    });
+                                    pasteEvent.clipboardData!.setData("text/plain", aiResponse.replyContent);
+                                    editor.dispatchEvent(pasteEvent);
+
+                                    await new Promise((r) => setTimeout(r, 1500));
+
+                                    // Click Send
+                                    const sendBtns = document.querySelectorAll('button[data-testid="tweetButton"]'); // Modal send button usually has this id
+                                    const realSendBtn = Array.from(sendBtns).find((b) => !b.disabled);
+                                    if (realSendBtn) {
+                                        realSendBtn.dispatchEvent(new Event("click", { bubbles: true }));
+                                        await waitSendSuccess(); // usage of existing helper
+                                        currentCount++;
+                                    } else {
+                                        // Fallback look for "Reply" text buttons if testid differs
+                                        const allButtons = document.querySelectorAll("button");
+                                        const fallbackBtn = Array.from(allButtons).find((button) => {
+                                            return ["Reply", "回复", "发布", "Post", "Reply答"].includes(button.textContent || "");
+                                        });
+                                        if (fallbackBtn && !fallbackBtn.disabled) {
+                                            fallbackBtn.dispatchEvent(new Event("click", { bubbles: true }));
+                                            await waitSendSuccess(); // usage of existing helper
+                                            currentCount++;
+                                        } else {
+                                            throw new Error("无法点击发送按钮（按钮未找到或禁用）");
+                                        }
+                                    }
+                                    browser.runtime.sendMessage({
+                                        action: "oneClickCommentStatus",
+                                        data: { log: `回复用户 ${targetUserName} 成功` }
+                                    });
+                                } else {
+                                    throw new Error("找不到编辑器");
+                                }
+                            } else {
+                                // Close modal if no content generated
+                                browser.runtime.sendMessage({
+                                    action: "oneClickCommentStatus",
+                                    data: { log: `AI回复生成失败或为空，取消操作` }
+                                });
+                                const closeBtn = document.querySelector('[data-testid="app-bar-close"]');
+                                if (closeBtn) (closeBtn as HTMLElement).click();
+                            }
+                        } else {
+                            browser.runtime.sendMessage({
+                                action: "oneClickCommentStatus",
+                                data: { log: `未找到推文文本内容，取消操作` }
+                            });
+                            // 关闭可能打开的弹窗
+                            const closeBtn = document.querySelector('[data-testid="app-bar-close"]');
+                            if (closeBtn) (closeBtn as HTMLElement).click();
+                        }
+                    } else {
+                        throw new Error("未找到回复按钮");
+                    }
+                } catch (replyError) {
+                    console.error("Reply on user home failed", replyError);
+                    browser.runtime.sendMessage({
+                        action: "oneClickCommentStatus",
+                        data: { log: `回复失败: ${replyError.message}` }
+                    });
+                    // Try to close modal blindly just in case
+                    await closeCommentDialog();
+                }
+            } else {
+                browser.runtime.sendMessage({
+                    action: "oneClickCommentStatus",
+                    data: { log: `该用户没有合适推文可回复` }
+                });
+            }
+
+            // 6. 返回 post 主页
+            browser.runtime.sendMessage({
+                action: "oneClickCommentStatus",
+                data: { log: `返回主贴页面` }
+            });
+
+            const backButton = document.querySelector('[aria-label="Back"]');
+            if (backButton) {
+                (backButton as HTMLElement).click();
+            } else {
+                window.history.back();
+            }
+
+            await new Promise((r) => setTimeout(r, 2000));
+
+            if (document.querySelector('[data-testid="twc-cc-mask"]')) {
+                await closeCommentDialog();
+                const closeBtn = document.querySelector('[aria-label="Close"]');
+                if (closeBtn) (closeBtn as HTMLElement).click();
+                await new Promise((r) => setTimeout(r, 1000));
+
+                if (backButton) {
+                    (backButton as HTMLElement).click();
+                } else {
+                    window.history.back();
+                }
+            }
+
+            // Wait for main page restore
+            await new Promise((r) => setTimeout(r, 3000));
+            if (isStopOneClick) throw new Error("任务已停止");
+            await waitForElement('[data-testid="tweetText"]');
+        } // end while
+
+        browser.runtime.sendMessage({
+            action: "oneClickCommentStatus",
+            data: { status: "completed", log: `互动评论任务完成，共回复 ${currentCount} 人` }
+        });
+    } catch (e) {
+        console.error("MockInteractCommentersX Error", e);
+        browser.runtime.sendMessage({
+            action: "oneClickCommentStatus",
+            data: {
+                status: "error",
+                log: e.message || "执行出错"
             }
         });
         await selfLocalStorage.removeItem("oneClick_isRunning");
