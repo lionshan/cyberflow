@@ -169,6 +169,19 @@ export interface GetReplyTweetsParams {
     [property: string]: any;
 }
 
+// 上报Grok文章参数
+export interface ReportGrokArticleParams {
+    /**
+     * 文章内容
+     */
+    content: string;
+    /**
+     * 任务ID
+     */
+    missionId: number;
+    [property: string]: any;
+}
+
 const baseURL: string = import.meta.env.VITE_API_BASE_URL || "";
 
 // console.log("baseURLbaseURLbaseURLbaseURL", baseURL, import.meta.env);
@@ -456,6 +469,10 @@ export const workflowApi = {
      */
     getAgentList: (params: AgentQueryParams): Promise<ApiResponse<PageData<AgentItem>>> => {
         return request.get<PageData<AgentItem>>(`/api/cyberflow/ai/page`, params);
+    },
+
+    reportGrokArticle: (data: ReportGrokArticleParams): Promise<ApiResponse<any>> => {
+        return request.post<any>(`/api/cyberflow/plugin/mission/report-article`, data);
     }
 };
 

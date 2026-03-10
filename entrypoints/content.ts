@@ -1,4 +1,4 @@
-import { DynamicX, MockCommentX, MockSingleCommentX, MockOneClickCommentX, MockInteractCommentersX, stopMockOneClickCommentX } from "@/utils/x";
+import { DynamicX, MockCommentX, MockSingleCommentX, MockOneClickCommentX, MockInteractCommentersX, stopMockOneClickCommentX, mockEditDrafts, mockGrok } from "@/utils/x";
 import { selfLocalStorage } from "@/utils/storage";
 
 export default defineContentScript({
@@ -54,7 +54,61 @@ export default defineContentScript({
             console.log("oneClickComment data", data);
             await MockInteractCommentersX(data);
         };
+
+        const editDrafts = async (data: any, sendResponse: (response: any) => void) => {
+            console.log("editDrafts data", data);
+
+            try {
+                const result = await mockEditDrafts(data);
+                sendResponse({
+                    task: {
+                        ...data,
+                        ...result
+                    },
+                    result: true
+                });
+            } catch (error) {
+                console.log("editDraftseditDrafts error", error);
+                sendResponse({ task: data, result: error.message });
+            }
+        };
+
+        const getGrokContent = async (data: any, sendResponse: (response: any) => void) => {
+            console.log("getGrokContent data", data);
+
+            try {
+                let needTextPrompt = `阅读以下x list内的账号，以及过去24小时最热门的 crypto （有价值的）相关 x post。【${data.listUrl}】帮我总结，过去24小时，crypto领域在发生的事情。热门的 crypto 领域的 x post，要过滤掉价值低的（单纯发发调侃/笑话/牢骚的）。包括：宏观/大盘，重要项目进展，交易机会，需要关注的新叙事等。新叙事需要有详细的具体项目/事件/数据进展的描述，不要只是告诉我，“什么是新叙事”。我需要知道的是，具体这个领域过去24小时在发生什么。比如“预测市场”“x402”“neobank”等等这些新叙事，有哪些项目在做什么事情。要求内容详细，用中文。`;
+                const result = await mockGrok(needTextPrompt);
+                if (!!result) {
+                    sendResponse({
+                        task: {
+                            ...data,
+                            grokContent: result
+                        },
+                        result: true
+                    });
+                } else {
+                    sendResponse({
+                        task: {
+                            ...data
+                        },
+                        result: false
+                    });
+                }
+            } catch (error) {
+                console.log("getGrokContent error", error);
+                sendResponse({ task: data, result: error.message });
+            }
+        };
         console.log("Hello content.");
+
+        // 获取当前页面的 Tab ID
+        browser.runtime.sendMessage({ action: "getTabId" }).then((response) => {
+            if (response && response.tabId) {
+                console.log("Current Tab ID:", response.tabId);
+            }
+        });
+
         browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
             console.log("Message received in content script:", request);
 
@@ -82,6 +136,12 @@ export default defineContentScript({
                 case "stopOneClickComment":
                     stopMockOneClickCommentX();
                     sendResponse({ result: true });
+                    return true;
+                case "editDrafts":
+                    editDrafts(request.data, sendResponse);
+                    return true;
+                case "getGrokContent":
+                    getGrokContent(request.data, sendResponse);
                     return true;
                 default:
                     console.log("Unknown action:", request.action);

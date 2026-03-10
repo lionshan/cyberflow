@@ -1885,3 +1885,280 @@ export async function MockInteractCommentersX(data: any) {
         await selfLocalStorage.removeItem("oneClick_isRunning");
     }
 }
+
+export async function mockEditDrafts(data: { title: string; cover?: string; content: string }) {
+    const randomWait = async (min = 1000, max = 10000) => {
+        const ms = Math.floor(Math.random() * (max - min + 1)) + min;
+        await new Promise((resolve) => setTimeout(resolve, ms));
+    };
+
+    // 1. Click New Draft Button
+    const newDraftBtnSelector = 'main button[aria-label="create"]';
+    try {
+        const btn = await waitForElement(newDraftBtnSelector);
+        if (btn) (btn as HTMLElement).click();
+    } catch (e) {
+        console.error("Failed to find create draft button", e);
+        return;
+    }
+    await randomWait();
+
+    // 2. Cover Image
+    if (data.cover) {
+        const inputSelector = 'input[data-testid="fileInput"]';
+        try {
+            const fileInput = (await waitForElement(inputSelector)) as HTMLInputElement;
+
+            const response = await fetch(data.cover);
+            const blob = await response.blob();
+            const file = new File([blob], "cover.png", { type: blob.type });
+
+            const dataTransfer = new DataTransfer();
+            dataTransfer.items.add(file);
+            fileInput.files = dataTransfer.files;
+
+            fileInput.dispatchEvent(new Event("change", { bubbles: true }));
+            fileInput.dispatchEvent(new Event("input", { bubbles: true }));
+
+            // 3. Confirm Popup
+            // Wait for dialog in layers
+            await waitForElement('div[role="dialog"]');
+            await randomWait(1000, 3000);
+
+            // Try to find a confirm button in the dialog (usually the last button or a primary colored one)
+            // X usually puts the "Apply" or "Save" button in the top right or bottom right
+            const layerButtons = Array.from(document.querySelectorAll("#layers button"));
+            // Find button with specific aria-labels like "Save", "Apply", "Done" or just distinct style
+            // If specific selector is unknown, we might try to find the one that appeared recently
+            const confirmBtn =
+                layerButtons.find((b) => {
+                    const label = b.textContent?.toLowerCase() || b.getAttribute("aria-label")?.toLowerCase() || "";
+                    return label.includes("save") || label.includes("apply") || label.includes("done") || label.includes("保存") || label.includes("应用");
+                }) || layerButtons.pop(); // Fallback to last button if not found specific text
+
+            if (confirmBtn) {
+                debugger;
+                (confirmBtn as HTMLElement).focus();
+                (confirmBtn as HTMLElement).click();
+            }
+            await randomWait();
+        } catch (e) {
+            console.error("Failed to handle cover image", e);
+        }
+    }
+    console.log("模拟用户录入图片插入完成");
+
+    // 4. Title
+    const titleSelector = 'textarea[placeholder="Add a title"]';
+    try {
+        const titleEl = (await waitForElement(titleSelector)) as HTMLTextAreaElement;
+        titleEl.focus();
+        titleEl.select();
+
+        // 尝试使用 execCommand (模拟用户输入)
+        const success = document.execCommand("insertText", false, data.title);
+
+        // 如果 execCommand 失败或值未更新，使用 React 属性设置器 Hack
+        if (!success || titleEl.value !== data.title) {
+            const nativeTextAreaValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set;
+            if (nativeTextAreaValueSetter) {
+                nativeTextAreaValueSetter.call(titleEl, data.title);
+            } else {
+                titleEl.value = data.title;
+            }
+            titleEl.dispatchEvent(new Event("input", { bubbles: true }));
+        }
+    } catch (e) {
+        // Fallback for title if placeholder is different or it's name attribute
+        try {
+            const titleElByName = document.querySelector('textarea[name="Article Title"]') as HTMLTextAreaElement;
+            if (titleElByName) {
+                titleElByName.focus();
+
+                const success = document.execCommand("insertText", false, data.title);
+
+                if (!success || titleElByName.value !== data.title) {
+                    const nativeTextAreaValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set;
+                    if (nativeTextAreaValueSetter) {
+                        nativeTextAreaValueSetter.call(titleElByName, data.title);
+                    } else {
+                        titleElByName.value = data.title;
+                    }
+                    titleElByName.dispatchEvent(new Event("input", { bubbles: true }));
+                }
+            }
+        } catch (e2) {
+            console.error("Failed to insert title", e);
+        }
+    }
+    await randomWait();
+
+    // 5. Content
+    try {
+        const editorSelector = "div[contenteditable='true'][role='textbox']";
+        let editorEl = document.querySelector(editorSelector);
+
+        if (!editorEl) {
+            editorEl = document.querySelector(".ProseMirror");
+        }
+
+        if (editorEl) {
+            (editorEl as HTMLElement).focus();
+
+            const chunks = data.content.match(/[\s\S]{1,500}/g) || [data.content];
+            for (const chunk of chunks) {
+                const clipboardEvent = new ClipboardEvent("paste", {
+                    clipboardData: new DataTransfer(),
+                    bubbles: true,
+                    cancelable: true,
+                    composed: true
+                });
+                clipboardEvent.clipboardData?.setData("text/plain", chunk);
+                editorEl.dispatchEvent(clipboardEvent);
+                await randomWait(1000, 3000);
+            }
+        } else {
+            console.error("Could not find editor element");
+        }
+    } catch (e) {
+        console.error("Failed to insert content", e);
+    }
+
+    // 6. Wait for auto save
+    await randomWait(2000, 5000);
+
+    console.log("模拟用户录入草稿完成");
+}
+
+export async function mockGrok(text: string) {
+    const randomWait = async (min = 1000, max = 3000) => {
+        const ms = Math.floor(Math.random() * (max - min + 1)) + min;
+        await new Promise((resolve) => setTimeout(resolve, ms));
+    };
+
+    // 1. Find and fill textarea
+    const textareaSelector = "textarea";
+    try {
+        await waitForElement(textareaSelector);
+    } catch (e) {
+        console.error("Grok textarea not found");
+        return;
+    }
+    let textarea = document.querySelector(textareaSelector) as HTMLTextAreaElement;
+
+    textarea.focus();
+    textarea.select();
+
+    // Simulate typing - try execCommand first for best emulation
+    const success = document.execCommand("insertText", false, text);
+
+    // Fallback to React hack if needed
+    if (!success || textarea.value !== text) {
+        const nativeTextAreaValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set;
+        if (nativeTextAreaValueSetter) {
+            nativeTextAreaValueSetter.call(textarea, text);
+        } else {
+            textarea.value = text;
+        }
+        textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+
+    // Wait for button state update
+    await randomWait(1000, 1500);
+
+    // 2. Click button
+    const buttonSelector = 'button[aria-label="Grok something"]';
+    let button = document.querySelector(buttonSelector) as HTMLButtonElement;
+
+    if (!button) {
+        console.error("Grok button not found");
+        return;
+    }
+
+    // Ensure button is enabled before clicking
+    if (button.disabled) {
+        console.log("Button is disabled, waiting additional time...");
+        await randomWait(1000, 2000);
+        button = document.querySelector(buttonSelector) as HTMLButtonElement;
+    }
+
+    if (!button.disabled) {
+        button.click();
+        console.log("Clicked Grok button");
+    } else {
+        console.error("Grok button still disabled, text insertion might have failed or input too short");
+        return;
+    }
+
+    // 3. Wait for response
+    console.log("Waiting for response...");
+
+    // Logic:
+    // - Immediately after click, input might clear and button disables.
+    // - OR button becomes "Stop generating".
+    // - We wait until button is back to "Grok something" AND disabled (meaning idle and empty input).
+
+    let isComplete = false;
+    let maxChecks = 60; // 10 minutes max
+    let checkInterval = 10000;
+
+    // Initial wait to ensure state changed from "click"
+    await randomWait(2000, 3000);
+
+    for (let i = 0; i < maxChecks; i++) {
+        await new Promise((r) => setTimeout(r, checkInterval));
+
+        const currentButton = document.querySelector(buttonSelector) as HTMLButtonElement;
+
+        // The user provided HTML for the "finished" state:
+        // aria-disabled="true" disabled="" aria-label="Grok something"
+        // This implies input is empty and generation is done.
+
+        if (currentButton && currentButton.disabled && currentButton.getAttribute("aria-label") === "Grok something") {
+            // It seems we aim for this state.
+            // But we must be careful: if we just clicked, and the input cleared, it might be disabled immediately?
+            // usually "Grok something" button is only visible when idle. When active, it changes or disables.
+            // If it is disabled and label is "Grok something", it means it's ready for NEW input.
+            // So if we just clicked, it should have cleared input (so disabled) AND finished (so "Grok something").
+            // Wait, if it's generating, usually it says "Stop generating".
+            // So if label is "Grok something", it means NOT generating.
+            // And if disabled, it means NO input to send.
+
+            // So "Grok something" + Disabled = Finished & Idle.
+            console.log("Grok response likely finished (button disabled and reset).");
+            isComplete = true;
+            break;
+        }
+
+        // Also check if "Stop generating" exists?
+        // But user instructions were specific about checking the button node state.
+    }
+
+    if (isComplete) {
+        // 4. Copy content using the copy button
+        try {
+            // Click the last copy button (assumed to be the response to our query)
+            const columnWrap = document.querySelector('[style="flex-direction: column;"]');
+            if (!columnWrap) {
+                console.error("Failed to find column wrap for Grok responses");
+                return;
+            }
+            // @ts-ignore
+            let textNode = columnWrap.children[2].children[0].children[0].children[0].children[2] as HTMLElement;
+
+            if (textNode) {
+                console.log("grok返回数据:", textNode.innerText);
+                return textNode.innerText;
+            } else {
+                console.error("Failed to find text node for textNode");
+                return null;
+            }
+        } catch (e) {
+            console.error("Failed to copy/read text:", e);
+            return null;
+        }
+    } else {
+        console.log("Timeout waiting for Grok response.");
+        return null;
+    }
+}
