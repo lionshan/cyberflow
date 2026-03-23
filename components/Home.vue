@@ -103,7 +103,7 @@
             <!-- 一键评论区域 -->
             <OneClickComment ref="oneClickCommentRef" @start="startOnClickComment" @stopOneClickComment="stopOneClickComment" v-if="activeTab === 'comment'" :curUserName="userData?.nickname" />
         </div>
-        <HomeWorkFlow :workflowList="workflows" :selectList="selectflows" v-if="showContent === 'workflow'" @confirm="backHome" />
+        <HomeWorkFlow :xData="xData" :workflowList="workflows" :selectList="selectflows" v-if="showContent === 'workflow'" @confirm="backHome" />
     </div>
 </template>
 
@@ -117,6 +117,7 @@ import OneClickComment from "@/components/OneClickComment.vue";
 import { ElMessage } from "element-plus";
 import { selfLocalStorage } from "@/utils/storage";
 import type { WorkFlowData } from "@/types/workflow";
+
 const emit = defineEmits(["logout", "checkX"]);
 const props = defineProps({
     userData: {

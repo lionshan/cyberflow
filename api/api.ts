@@ -239,6 +239,8 @@ apiClient.interceptors.response.use(
                 selfLocalStorage.removeItem("page");
                 ElMessage.error("登录已过期，请重新登录");
                 window.location.reload();
+            } else if (data.code === 11506) {
+                return data as any; // 返回处理后的数据
             } else {
                 // 业务错误
                 throw new ApiError(data.message || data.msg || "请求失败", data.code);

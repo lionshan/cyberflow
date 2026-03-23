@@ -44,6 +44,7 @@ const userData = ref<Record<string, any> | undefined>(undefined);
 const workflowData = ref<Record<string, any> | undefined>(undefined);
 const xData = ref<Record<string, any> | undefined>(undefined);
 const showPage = ref(""); // 控制显示的页面
+const LOGIN_STORE_KEY = "cybeflow_login_info";
 // Use the correct type for the Login component instance
 const logoRef = ref<ComponentPublicInstance<{
     clearInputs: () => void;
@@ -214,6 +215,7 @@ const onLogin = (name, pass) => {
 };
 
 const onLogout = () => {
+    selfLocalStorage.removeItem(LOGIN_STORE_KEY);
     userApi
         .logout()
         .then(async () => {
@@ -289,6 +291,7 @@ watch(showPage, (newPage) => {
 
 <style scoped lang="scss">
 .popup_wrapper {
+    overflow: hidden;
     display: flex;
     flex-direction: column;
     align-items: center;

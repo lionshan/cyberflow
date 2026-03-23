@@ -52,7 +52,35 @@ export default defineContentScript({
         };
         const oneClickComment = async (data: any) => {
             console.log("oneClickComment data", data);
-            await MockInteractCommentersX(data);
+            //获取当前评论数量
+            let curReplyCount = 10;
+            try {
+                const replyContainer = document.querySelector('[data-testid="reply"]');
+                if (replyContainer) {
+                    const countContainer = replyContainer.querySelector('[data-testid="app-text-transition-container"]');
+                    if (countContainer) {
+                        const countText = (countContainer as HTMLElement).innerText;
+                        // 提取数字并处理格式（去逗号等）
+                        let parsedCount = 0;
+                        if (countText.includes("K")) {
+                            parsedCount = parseFloat(countText.replace("K", "")) * 1000;
+                        } else if (countText.includes("M")) {
+                            parsedCount = parseFloat(countText.replace("M", "")) * 1000000;
+                        } else {
+                            parsedCount = parseInt(countText.replace(/,/g, ""), 10);
+                        }
+
+                        if (!isNaN(parsedCount) && parsedCount > 0) {
+                            // 取50%的正数
+                            curReplyCount = Math.ceil(parsedCount * 0.5);
+                        }
+                    }
+                }
+            } catch (error: any) {
+                console.error("获取评论数失败", error);
+            }
+
+            await MockInteractCommentersX({ ...data, maxCommentCount: curReplyCount });
         };
 
         const editDrafts = async (data: any, sendResponse: (response: any) => void) => {

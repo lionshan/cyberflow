@@ -197,10 +197,12 @@ export default defineBackground(() => {
                         missionId: response.task.missionId,
                         content: response.task.grokContent
                     });
+                    //上报完内容后不直接结束任务继续轮训下一任务就是存草稿，等待存后才上报结束
+                    return await taskFinished();
                 }
                 await workflowApi.finishedTask(responseData);
                 logInfo("插件：" + `任务处理完成: ${response.task.workflowName}(${response.task.missionId})`);
-                return await taskFinished(task);
+                return await taskFinished();
             } else {
                 console.error("任务处理失败:", response.result);
                 let needShow = false;
@@ -210,12 +212,12 @@ export default defineBackground(() => {
                 logInfo("插件错误：" + `任务处理失败: ${response.result}`, needShow);
                 if (response.task) {
                     await workflowApi.cancelTask(response.task.id, response.result);
-                    return await taskFinished(task);
+                    return await taskFinished();
                 }
             }
         } else {
             console.log("rrrrrr:", response);
-            return await taskErrorFinished(task);
+            return await taskErrorFinished();
         }
     };
     (globalThis as any).testFunction = testFunction;
@@ -321,7 +323,29 @@ export default defineBackground(() => {
             closeWorkflow();
             return;
         }
-        if (task.eventtype === "post_tweet_event") {
+        if (task.eventtype === "post_tweet_event" || task.eventtype === "reply_hot_content_event") {
+            waitContentScriptLoaded = false;
+            sendMessageWithRetry(currentTabId, {
+                action: "changeTabUrl",
+                data: {
+                    url: `https://x.com/compose/articles`
+                }
+            })
+                .then((response) => {
+                    console.log("changeTabUrl response", response);
+                })
+                .catch((error) => {
+                    console.error("消息发送失败:", error);
+                    taskErrorFinished();
+                });
+            await new Promise<void>((resolve) => {
+                const checkInterval = setInterval(() => {
+                    if (waitContentScriptLoaded) {
+                        clearInterval(checkInterval);
+                        resolve();
+                    }
+                }, 500);
+            });
             sendMessageWithRetry(currentTabId, {
                 action: "editDrafts",
                 data: task
@@ -542,6 +566,11 @@ export default defineBackground(() => {
         workflowApi
             .getJobIdStatus(jobId)
             .then(async (res) => {
+                if (res.code === 11506) {
+                    logInfo("服务端：" + res.msg);
+                    stopWork(() => {});
+                    return;
+                }
                 if (res.data != null) {
                     logInfo("服务端：" + res.data.message);
 

@@ -1,20 +1,10 @@
 <template>
     <div class="workflow_wrapper" v-loading="loading">
-        <LogoHead
-            key="workflow"
-            :showLogout="true"
-            class="logo_head"
-            @logout="emit('logout')"
-        />
+        <LogoHead key="workflow" :showLogout="true" class="logo_head" @logout="emit('logout')" />
         <div class="title">选择工作流</div>
         <div class="raidos_wrap">
             <el-radio-group v-model="workSelectId" v-if="workflows.length > 0">
-                <el-radio
-                    v-for="workflow in workflows"
-                    :key="workflow.id"
-                    :value="workflow.id?.toString()"
-                    size="large"
-                >
+                <el-radio v-for="workflow in workflows" :key="workflow.id" :value="workflow.id?.toString()" size="large">
                     {{ `${workflow.workflowName} ${workflow.accountName}` }}
                 </el-radio>
             </el-radio-group>
@@ -79,9 +69,7 @@ const handleSubmit = () => {
         ElMessage.warning("请选择工作流");
         return;
     }
-    let selectWorkflow = workflows.value.find(
-        (item) => item.id?.toString() == workSelectId.value
-    );
+    let selectWorkflow = workflows.value.find((item) => item.id?.toString() == workSelectId.value);
     emit("submit", selectWorkflow);
 };
 const loading = ref(false);
@@ -92,8 +80,8 @@ const loading = ref(false);
     border-radius: 12px 12px 12px 12px;
     border-radius: 12px 12px 12px 12px;
     .logo_head {
-        margin-block: 40px;
-        margin-top: 80px;
+        margin-block: 20px;
+        // margin-top: 80px;
         width: 100%;
     }
     display: flex;

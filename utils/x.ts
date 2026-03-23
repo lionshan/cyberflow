@@ -7,6 +7,7 @@ interface AccountInfo {
     avatarUrl?: string;
     extraData: unknown;
     xAccountInfoChange?: boolean;
+    isBlueVerified: boolean;
 }
 import { selfLocalStorage } from "@/utils/storage";
 async function checkNeedRetry() {
@@ -163,7 +164,8 @@ export async function getXAccountInfo(): Promise<AccountInfo> {
         description: userInfo.description,
         profileUrl: `https://x.com/${userInfo.screen_name}`,
         avatarUrl: userInfo.profile_image_url_https,
-        extraData: initialState
+        extraData: initialState,
+        isBlueVerified: userInfo.is_blue_verified
     };
     // let oldUserName = await selfLocalStorage.getItem("xUserName");
     // if (oldUserName && oldUserName !== userInfo.screen_name) {
@@ -1486,9 +1488,9 @@ function extractUserNameFromUrl(url: string): string | null {
     return match ? match[1] : null;
 }
 export async function MockInteractCommentersX(data: any) {
-    const { aiId } = data;
+    const { aiId, maxCommentCount } = data;
     const processedUsers = new Set<string>();
-    const MAX_USERS = 10;
+    const MAX_USERS = maxCommentCount;
 
     // Load self username to exclude
     const myUserName = await selfLocalStorage.getItem("xUserName");
@@ -1886,7 +1888,7 @@ export async function MockInteractCommentersX(data: any) {
     }
 }
 
-export async function mockEditDrafts(data: { title: string; cover?: string; content: string }) {
+export async function mockEditDrafts(data: { title: string; cover?: string; text: string }) {
     const randomWait = async (min = 1000, max = 10000) => {
         const ms = Math.floor(Math.random() * (max - min + 1)) + min;
         await new Promise((resolve) => setTimeout(resolve, ms));
@@ -1947,52 +1949,52 @@ export async function mockEditDrafts(data: { title: string; cover?: string; cont
         }
     }
     console.log("模拟用户录入图片插入完成");
-
-    // 4. Title
-    const titleSelector = 'textarea[placeholder="Add a title"]';
-    try {
-        const titleEl = (await waitForElement(titleSelector)) as HTMLTextAreaElement;
-        titleEl.focus();
-        titleEl.select();
-
-        // 尝试使用 execCommand (模拟用户输入)
-        const success = document.execCommand("insertText", false, data.title);
-
-        // 如果 execCommand 失败或值未更新，使用 React 属性设置器 Hack
-        if (!success || titleEl.value !== data.title) {
-            const nativeTextAreaValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set;
-            if (nativeTextAreaValueSetter) {
-                nativeTextAreaValueSetter.call(titleEl, data.title);
-            } else {
-                titleEl.value = data.title;
-            }
-            titleEl.dispatchEvent(new Event("input", { bubbles: true }));
-        }
-    } catch (e) {
-        // Fallback for title if placeholder is different or it's name attribute
+    if (data.title) {
+        // 4. Title
+        const titleSelector = 'textarea[placeholder="Add a title"]';
         try {
-            const titleElByName = document.querySelector('textarea[name="Article Title"]') as HTMLTextAreaElement;
-            if (titleElByName) {
-                titleElByName.focus();
+            const titleEl = (await waitForElement(titleSelector)) as HTMLTextAreaElement;
+            titleEl.focus();
+            titleEl.select();
 
-                const success = document.execCommand("insertText", false, data.title);
+            // 尝试使用 execCommand (模拟用户输入)
+            const success = document.execCommand("insertText", false, data.title);
 
-                if (!success || titleElByName.value !== data.title) {
-                    const nativeTextAreaValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set;
-                    if (nativeTextAreaValueSetter) {
-                        nativeTextAreaValueSetter.call(titleElByName, data.title);
-                    } else {
-                        titleElByName.value = data.title;
-                    }
-                    titleElByName.dispatchEvent(new Event("input", { bubbles: true }));
+            // 如果 execCommand 失败或值未更新，使用 React 属性设置器 Hack
+            if (!success || titleEl.value !== data.title) {
+                const nativeTextAreaValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set;
+                if (nativeTextAreaValueSetter) {
+                    nativeTextAreaValueSetter.call(titleEl, data.title);
+                } else {
+                    titleEl.value = data.title;
                 }
+                titleEl.dispatchEvent(new Event("input", { bubbles: true }));
             }
-        } catch (e2) {
-            console.error("Failed to insert title", e);
+        } catch (e) {
+            // Fallback for title if placeholder is different or it's name attribute
+            try {
+                const titleElByName = document.querySelector('textarea[name="Article Title"]') as HTMLTextAreaElement;
+                if (titleElByName) {
+                    titleElByName.focus();
+
+                    const success = document.execCommand("insertText", false, data.title);
+
+                    if (!success || titleElByName.value !== data.title) {
+                        const nativeTextAreaValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set;
+                        if (nativeTextAreaValueSetter) {
+                            nativeTextAreaValueSetter.call(titleElByName, data.title);
+                        } else {
+                            titleElByName.value = data.title;
+                        }
+                        titleElByName.dispatchEvent(new Event("input", { bubbles: true }));
+                    }
+                }
+            } catch (e2) {
+                console.error("Failed to insert title", e);
+            }
         }
     }
     await randomWait();
-
     // 5. Content
     try {
         const editorSelector = "div[contenteditable='true'][role='textbox']";
@@ -2005,7 +2007,7 @@ export async function mockEditDrafts(data: { title: string; cover?: string; cont
         if (editorEl) {
             (editorEl as HTMLElement).focus();
 
-            const chunks = data.content.match(/[\s\S]{1,500}/g) || [data.content];
+            const chunks = data.text.match(/[\s\S]{1,500}/g) || [data.text];
             for (const chunk of chunks) {
                 const clipboardEvent = new ClipboardEvent("paste", {
                     clipboardData: new DataTransfer(),

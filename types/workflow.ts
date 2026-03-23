@@ -13,6 +13,9 @@ export interface WorkFlowData {
     /** 工作流详情 */
     workflowDetails?: string;
 
+    /** 是否需要蓝V */
+    needV?: boolean;
+
     /** 账户名称 */
     accountName?: string;
 }

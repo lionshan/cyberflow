@@ -4,10 +4,7 @@
         <div class="header">
             <div class="back-btn" @click="handleBack">
                 <svg class="back-icon" viewBox="0 0 24 24">
-                    <path
-                        d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"
-                        fill="currentColor"
-                    />
+                    <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" fill="currentColor" />
                 </svg>
                 返回主页
             </div>
@@ -16,16 +13,11 @@
 
         <!-- 工作流列表 -->
         <div class="workflow-list">
-            <div
-                v-for="(workflow, index) in workflowList"
-                :key="workflow.id"
-                class="workflow-item"
-                :class="{ selected: isSelect(workflow) }"
-                @click="toggleSelection(workflow)"
-            >
+            <div v-for="(workflow, index) in workflowList" :key="workflow.id" class="workflow-item" :class="{ selected: isSelect(workflow) }" @click="toggleSelection(workflow)">
                 <div class="workflow-content">
                     <div class="workflow-title">
                         {{ workflow.workflowName }}
+                        <span v-if="workflow.needV" class="vip-tag">蓝V</span>
                     </div>
                     <div class="workflow-subtitle">
                         {{ workflow.workflowDetails }}
@@ -34,10 +26,7 @@
                 <div class="workflow-meta">
                     <div class="checkbox" v-if="isSelect(workflow)">
                         <svg class="check-icon" viewBox="0 0 24 24">
-                            <path
-                                d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"
-                                fill="white"
-                            />
+                            <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" fill="white" />
                         </svg>
                     </div>
                 </div>
@@ -47,12 +36,17 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, reactive, computed } from "vue";
+import { ref, reactive, computed, onMounted } from "vue";
+import { ElMessage } from "element-plus";
 import type { WorkFlowData } from "@/types/workflow";
 const props = defineProps({
     workflowList: {
         type: Array as () => WorkFlowData[],
         default: () => []
+    },
+    xData: {
+        type: Object || null,
+        default: null
     },
     selectList: {
         type: Array as () => WorkFlowData[],
@@ -114,10 +108,12 @@ const handleBack = () => {
 };
 
 const toggleSelection = (workflow: WorkFlowData) => {
+    if (workflow.needV && !props.xData?.isBlueVerified) {
+        ElMessage.warning("需要X网站蓝v用户使用");
+        return;
+    }
     if (isSelect(workflow)) {
-        curSelectList.value = curSelectList.value.filter(
-            (item) => item.id !== workflow.id
-        );
+        curSelectList.value = curSelectList.value.filter((item) => item.id !== workflow.id);
     } else {
         curSelectList.value.push(workflow);
     }
@@ -148,17 +144,28 @@ const toggleSelection = (workflow: WorkFlowData) => {
         align-items: center;
         cursor: pointer;
         font-family: PingFang SC, PingFang SC;
-        font-weight: 400;
-        font-size: 14px;
-        color: #000000;
+        font-weight: 500;
+        font-size: 13px;
+        color: #9e40ff;
+        background: #f7f0ff;
+        border: 1px solid #e1c0ff;
+        border-radius: 6px;
+        padding: 4px 10px;
         text-align: left;
         font-style: normal;
         text-transform: none;
+        transition: all 0.2s ease;
+
+        &:hover {
+            background: #efe0ff;
+            border-color: #d1a0ff;
+        }
 
         .back-icon {
-            width: 24px;
-            height: 24px;
-            margin-right: 5px;
+            width: 18px;
+            height: 18px;
+            margin-right: 2px;
+            margin-left: -4px;
         }
     }
 
@@ -203,6 +210,9 @@ const toggleSelection = (workflow: WorkFlowData) => {
         padding-block: 10px;
         min-width: 0;
         .workflow-title {
+            display: flex;
+            align-items: center;
+            gap: 6px;
             height: 20px;
             font-family: PingFang SC, PingFang SC;
             font-weight: 400;
@@ -211,6 +221,22 @@ const toggleSelection = (workflow: WorkFlowData) => {
             text-align: center;
             font-style: normal;
             text-transform: none;
+
+            .vip-tag {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                padding: 0 6px;
+                height: 18px;
+                background: linear-gradient(90deg, #e6f0ff 0%, #f0f5ff 100%);
+                color: #1d9bf0;
+                font-size: 10px;
+                border-radius: 4px;
+                font-style: italic;
+                font-weight: bold;
+                border: 1px solid #cce0ff;
+                line-height: 1;
+            }
         }
 
         .workflow-subtitle {
