@@ -4,6 +4,7 @@ import { selfLocalStorage } from "@/utils/storage";
 export default defineContentScript({
     matches: ["*://x.com/*"],
     runAt: "document_start",
+    allFrames: false,
     main() {
         const publishX = async (data: any, sendResponse: (response: any) => void) => {
             try {
@@ -108,19 +109,29 @@ export default defineContentScript({
                 let needTextPrompt = `阅读以下x list内的账号，以及过去24小时最热门的 crypto （有价值的）相关 x post。【${data.listUrl}】帮我总结，过去24小时，crypto领域在发生的事情。热门的 crypto 领域的 x post，要过滤掉价值低的（单纯发发调侃/笑话/牢骚的）。包括：宏观/大盘，重要项目进展，交易机会，需要关注的新叙事等。新叙事需要有详细的具体项目/事件/数据进展的描述，不要只是告诉我，“什么是新叙事”。我需要知道的是，具体这个领域过去24小时在发生什么。比如“预测市场”“x402”“neobank”等等这些新叙事，有哪些项目在做什么事情。要求内容详细，用中文。`;
                 const result = await mockGrok(needTextPrompt);
                 if (!!result) {
-                    sendResponse({
-                        task: {
-                            ...data,
-                            grokContent: result
-                        },
-                        result: true
-                    });
+                    if (result.length < 100) {
+                        console.log("获取内容过短", result);
+                        sendResponse({
+                            task: {
+                                ...data
+                            },
+                            result: "使用grok获取素材失败，返回内容过短，请检查当前账号grok是否可用。"
+                        });
+                    } else {
+                        sendResponse({
+                            task: {
+                                ...data,
+                                grokContent: result
+                            },
+                            result: true
+                        });
+                    }
                 } else {
                     sendResponse({
                         task: {
                             ...data
                         },
-                        result: false
+                        result: "使用grok获取素材失败，返回内容为空，请检查当前账号grok是否可用"
                     });
                 }
             } catch (error) {

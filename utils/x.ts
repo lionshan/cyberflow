@@ -1893,15 +1893,24 @@ export async function mockEditDrafts(data: { title: string; cover?: string; text
         const ms = Math.floor(Math.random() * (max - min + 1)) + min;
         await new Promise((resolve) => setTimeout(resolve, ms));
     };
-
+    await randomWait();
     // 1. Click New Draft Button
-    const newDraftBtnSelector = 'main button[aria-label="create"]';
+    const newDraftBtnSelector = 'button[aria-label="create"]';
     try {
-        const btn = await waitForElement(newDraftBtnSelector);
-        if (btn) (btn as HTMLElement).click();
+        const btn = document.querySelector(newDraftBtnSelector);
+        if (btn) {
+            (btn as HTMLElement).click();
+        } else {
+            const btnText = document.querySelector('a[data-testid="empty_state_button_text"]');
+            if (btnText) {
+                (btnText as HTMLElement).click();
+            } else {
+                throw new Error("未找到创建草稿按钮");
+            }
+        }
     } catch (e) {
         console.error("Failed to find create draft button", e);
-        return;
+        throw new Error("Failed to find create draft button" + e.message);
     }
     await randomWait();
 
@@ -1951,7 +1960,8 @@ export async function mockEditDrafts(data: { title: string; cover?: string; text
     console.log("模拟用户录入图片插入完成");
     if (data.title) {
         // 4. Title
-        const titleSelector = 'textarea[placeholder="Add a title"]';
+        const titleSelector = 'textarea[placeholder="Add a title"], textarea[placeholder="添加标题"], textarea[placeholder="添加標題"]';
+
         try {
             const titleEl = (await waitForElement(titleSelector)) as HTMLTextAreaElement;
             titleEl.focus();
@@ -1973,7 +1983,8 @@ export async function mockEditDrafts(data: { title: string; cover?: string; text
         } catch (e) {
             // Fallback for title if placeholder is different or it's name attribute
             try {
-                const titleElByName = document.querySelector('textarea[name="Article Title"]') as HTMLTextAreaElement;
+                const titleElByNameSelector = 'textarea[name="Article Title"], textarea[placeholder="文章标题"], textarea[placeholder="文章標題"]';
+                const titleElByName = document.querySelector(titleElByNameSelector) as HTMLTextAreaElement;
                 if (titleElByName) {
                     titleElByName.focus();
 
@@ -2021,9 +2032,11 @@ export async function mockEditDrafts(data: { title: string; cover?: string; text
             }
         } else {
             console.error("Could not find editor element");
+            throw new Error("Could not find editor element");
         }
     } catch (e) {
         console.error("Failed to insert content", e);
+        throw new Error("Failed to insert content");
     }
 
     // 6. Wait for auto save
@@ -2037,7 +2050,7 @@ export async function mockGrok(text: string) {
         const ms = Math.floor(Math.random() * (max - min + 1)) + min;
         await new Promise((resolve) => setTimeout(resolve, ms));
     };
-
+    await randomWait(); // Initial random wait before starting
     // 1. Find and fill textarea
     const textareaSelector = "textarea";
     try {
@@ -2069,7 +2082,7 @@ export async function mockGrok(text: string) {
     await randomWait(1000, 1500);
 
     // 2. Click button
-    const buttonSelector = 'button[aria-label="Grok something"]';
+    const buttonSelector = 'button[aria-label="Grok something"], button[aria-label="问 Grok 问题"], button[aria-label="問 Grok 一些問題"]';
     let button = document.querySelector(buttonSelector) as HTMLButtonElement;
 
     if (!button) {
@@ -2078,17 +2091,19 @@ export async function mockGrok(text: string) {
     }
 
     // Ensure button is enabled before clicking
-    if (button.disabled) {
-        console.log("Button is disabled, waiting additional time...");
+    let attempt = 0;
+    while (button && button.disabled && attempt < 20) {
+        console.log(`Button is disabled, waiting additional time... attempt ${attempt + 1}/20`);
         await randomWait(1000, 2000);
         button = document.querySelector(buttonSelector) as HTMLButtonElement;
+        attempt++;
     }
 
-    if (!button.disabled) {
+    if (button && !button.disabled) {
         button.click();
         console.log("Clicked Grok button");
     } else {
-        console.error("Grok button still disabled, text insertion might have failed or input too short");
+        console.error("Grok button still disabled or not found, text insertion might have failed or input too short");
         return;
     }
 
@@ -2110,22 +2125,10 @@ export async function mockGrok(text: string) {
     for (let i = 0; i < maxChecks; i++) {
         await new Promise((r) => setTimeout(r, checkInterval));
 
-        const currentButton = document.querySelector(buttonSelector) as HTMLButtonElement;
+        const cancelSelector = 'button[aria-label="Cancel"], button[aria-label="取消"]';
+        const cancelButton = document.querySelector(cancelSelector) as HTMLButtonElement;
 
-        // The user provided HTML for the "finished" state:
-        // aria-disabled="true" disabled="" aria-label="Grok something"
-        // This implies input is empty and generation is done.
-
-        if (currentButton && currentButton.disabled && currentButton.getAttribute("aria-label") === "Grok something") {
-            // It seems we aim for this state.
-            // But we must be careful: if we just clicked, and the input cleared, it might be disabled immediately?
-            // usually "Grok something" button is only visible when idle. When active, it changes or disables.
-            // If it is disabled and label is "Grok something", it means it's ready for NEW input.
-            // So if we just clicked, it should have cleared input (so disabled) AND finished (so "Grok something").
-            // Wait, if it's generating, usually it says "Stop generating".
-            // So if label is "Grok something", it means NOT generating.
-            // And if disabled, it means NO input to send.
-
+        if (!cancelButton) {
             // So "Grok something" + Disabled = Finished & Idle.
             console.log("Grok response likely finished (button disabled and reset).");
             isComplete = true;

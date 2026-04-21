@@ -756,7 +756,7 @@ const handleStart = () => {
     margin-bottom: 20px;
     overflow-y: auto;
     padding-top: 10px;
-    min-height: 250px;
+    min-height: 200px;
     .log_item {
         display: flex;
         flex-direction: column;

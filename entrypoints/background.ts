@@ -18,7 +18,22 @@ export default defineBackground(() => {
             selfLocalStorage.removeItem("workflow");
         });
     };
-
+    const retryWorkflow = async () => {
+        let currentTabId = await selfLocalStorage.getItem("currentTabId");
+        if (!currentTabId) {
+            return;
+        }
+        sendMessageWithRetry(Number(currentTabId), {
+            action: "retryWorkflow"
+        })
+            .then((response) => {
+                console.log("retryWorkflow response", response);
+            })
+            .catch((error) => {
+                console.error("消息发送失败:", error);
+                taskErrorFinished();
+            });
+    };
     const openX = async () => {
         let xTab: any = await getXTab();
         (globalThis as any).tabId = xTab.id;
@@ -184,14 +199,14 @@ export default defineBackground(() => {
                         postTweetId: response.task.postTweetId
                     };
                 }
-                if (response.task.eventtype === "post_tweet_event") {
+                if (response.task.eventtype === "post_tweet_event" || response.task.eventtype === "reply_hot_content_event") {
                     responseData = {
                         missionId: response.task.missionId,
                         postTweetId: response.task.tweetId
                     };
                 }
 
-                if (response.task.eventtype === "plugin_hot_content_event" && !!response.task.grokContent) {
+                if (response.task.eventtype === "plugin_hot_content_event") {
                     //获取grok内容并且且不为空，则将内容传回后台
                     await workflowApi.reportGrokArticle({
                         missionId: response.task.missionId,
@@ -206,6 +221,7 @@ export default defineBackground(() => {
             } else {
                 console.error("任务处理失败:", response.result);
                 let needShow = false;
+
                 if (response.result.indexOf("页面已到底部，无法获取更多内容,等待新内容出现") !== -1) {
                     needShow = true;
                 }
@@ -308,6 +324,7 @@ export default defineBackground(() => {
         if (!currentTabId) {
             logInfo("插件错误：当前没有活动的标签页，无法执行任务");
             console.error("当前没有活动的标签页，无法执行任务");
+            taskErrorFinished();
             return;
         }
         taskState = "processing";
@@ -321,6 +338,7 @@ export default defineBackground(() => {
         if (checkRes && !checkRes.data) {
             console.error("工作流已经停止");
             closeWorkflow();
+            // retryWorkflow();
             return;
         }
         if (task.eventtype === "post_tweet_event" || task.eventtype === "reply_hot_content_event") {
@@ -346,6 +364,7 @@ export default defineBackground(() => {
                     }
                 }, 500);
             });
+
             sendMessageWithRetry(currentTabId, {
                 action: "editDrafts",
                 data: task
@@ -475,6 +494,7 @@ export default defineBackground(() => {
                     }
                 }, 500);
             });
+            await new Promise((resolve) => setTimeout(resolve, 1000));
             // 等待tab加载完成后再发送评论消息
             sendMessageWithRetry(currentTabId, {
                 action: "getGrokContent",
@@ -572,7 +592,13 @@ export default defineBackground(() => {
                     return;
                 }
                 if (res.data != null) {
-                    logInfo("服务端：" + res.data.message);
+                    if (res.data.logs && res.data.logs.length > 0) {
+                        res.data.logs.forEach((log: any) => {
+                            logInfo(`服务端日志：【${log.workflow}】 ${log.logInfo} (${log.createTime})`);
+                        });
+                    } else {
+                        logInfo("服务端：" + res.data.message);
+                    }
 
                     console.log("当前任务" + jobId + "，状态：", res.data.message);
                     let newTask = res.data.data;
