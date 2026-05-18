@@ -1,3 +1,5 @@
+import { marked } from "marked";
+
 interface AccountInfo {
     provider: string;
     accountId: string;
@@ -79,6 +81,22 @@ function waitSendSuccess(timeout = 20000): Promise<Element> {
         }, timeout);
     });
 }
+
+async function ensureActiveWorkTab(retryCount = 3): Promise<boolean> {
+    for (let i = 0; i < retryCount; i++) {
+        try {
+            const res = await browser.runtime.sendMessage({ action: "ensureActiveTab" });
+            if (res?.success) {
+                return true;
+            }
+        } catch (error) {
+            console.warn(`ensureActiveWorkTab failed attempt ${i + 1}/${retryCount}`, error);
+        }
+        await new Promise((resolve) => setTimeout(resolve, 400));
+    }
+    return false;
+}
+
 async function findTweetIdWithUserNameFirst(task: any): Promise<string | null> {
     let articlesDOM = document.querySelectorAll("article");
 
@@ -1893,25 +1911,41 @@ export async function mockEditDrafts(data: { title: string; cover?: string; text
         const ms = Math.floor(Math.random() * (max - min + 1)) + min;
         await new Promise((resolve) => setTimeout(resolve, ms));
     };
+    await ensureActiveWorkTab();
     await randomWait();
     // 1. Click New Draft Button
     const newDraftBtnSelector = 'button[aria-label="create"]';
-    try {
-        const btn = document.querySelector(newDraftBtnSelector);
-        if (btn) {
-            (btn as HTMLElement).click();
-        } else {
-            const btnText = document.querySelector('a[data-testid="empty_state_button_text"]');
-            if (btnText) {
-                (btnText as HTMLElement).click();
+
+    let btnClicked = false;
+    for (let attempts = 0; attempts < 3; attempts++) {
+        try {
+            const btn = document.querySelector(newDraftBtnSelector);
+            if (btn) {
+                (btn as HTMLElement).click();
+                btnClicked = true;
             } else {
-                throw new Error("未找到创建草稿按钮");
+                const btnText = document.querySelector('a[data-testid="empty_state_button_text"]');
+                if (btnText) {
+                    (btnText as HTMLElement).click();
+                    btnClicked = true;
+                }
             }
+            if (btnClicked) break;
+        } catch (e) {
+            console.error(`Attempt ${attempts + 1} failed to find create draft button`, e);
         }
-    } catch (e) {
-        console.error("Failed to find create draft button", e);
-        throw new Error("Failed to find create draft button" + e.message);
+
+        if (!btnClicked) {
+            console.log(`Create draft button not found, retrying... (${attempts + 1}/3)`);
+            await ensureActiveWorkTab();
+            await randomWait(2000, 3000);
+        }
     }
+
+    if (!btnClicked) {
+        throw new Error("未找到创建草稿按钮，3次重试失败");
+    }
+
     await randomWait();
 
     // 2. Cover Image
@@ -2018,25 +2052,29 @@ export async function mockEditDrafts(data: { title: string; cover?: string; text
         if (editorEl) {
             (editorEl as HTMLElement).focus();
 
-            const chunks = data.text.match(/[\s\S]{1,500}/g) || [data.text];
-            for (const chunk of chunks) {
-                const clipboardEvent = new ClipboardEvent("paste", {
-                    clipboardData: new DataTransfer(),
-                    bubbles: true,
-                    cancelable: true,
-                    composed: true
-                });
-                clipboardEvent.clipboardData?.setData("text/plain", chunk);
-                editorEl.dispatchEvent(clipboardEvent);
-                await randomWait(1000, 3000);
-            }
+            // 将 markdown 转换成 HTML
+            const htmlContent = await marked.parse(data.text);
+
+            const clipboardEvent = new ClipboardEvent("paste", {
+                clipboardData: new DataTransfer(),
+                bubbles: true,
+                cancelable: true,
+                composed: true
+            });
+
+            // 一次性设置 text/html 和 text/plain，富文本编辑器会优先读取 html 格式进行解析和保留样式排版
+            clipboardEvent.clipboardData?.setData("text/html", htmlContent);
+            clipboardEvent.clipboardData?.setData("text/plain", data.text);
+
+            editorEl.dispatchEvent(clipboardEvent);
+            await randomWait(1000, 3000);
         } else {
             console.error("Could not find editor element");
             throw new Error("Could not find editor element");
         }
     } catch (e) {
         console.error("Failed to insert content", e);
-        throw new Error("Failed to insert content");
+        throw new Error("Failed to insert content: " + (e as Error).message);
     }
 
     // 6. Wait for auto save
@@ -2050,14 +2088,15 @@ export async function mockGrok(text: string) {
         const ms = Math.floor(Math.random() * (max - min + 1)) + min;
         await new Promise((resolve) => setTimeout(resolve, ms));
     };
+    await ensureActiveWorkTab();
     await randomWait(); // Initial random wait before starting
     // 1. Find and fill textarea
     const textareaSelector = "textarea";
     try {
         await waitForElement(textareaSelector);
     } catch (e) {
+        await ensureActiveWorkTab();
         console.error("Grok textarea not found");
-        return;
     }
     let textarea = document.querySelector(textareaSelector) as HTMLTextAreaElement;
 
@@ -2123,6 +2162,7 @@ export async function mockGrok(text: string) {
     await randomWait(2000, 3000);
 
     for (let i = 0; i < maxChecks; i++) {
+        await ensureActiveWorkTab(1);
         await new Promise((r) => setTimeout(r, checkInterval));
 
         const cancelSelector = 'button[aria-label="Cancel"], button[aria-label="取消"]';

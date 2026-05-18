@@ -306,6 +306,30 @@ export default defineBackground(() => {
                     sendResponse({ tabId: null });
                 }
                 return true;
+            case "ensureActiveTab":
+                (async () => {
+                    try {
+                        const senderTabId = sender.tab?.id;
+                        const tabId = senderTabId || Number(await selfLocalStorage.getItem("currentTabId"));
+                        if (!tabId) {
+                            sendResponse({ success: false, message: "tabId not found" });
+                            return;
+                        }
+
+                        const tab = await browser.tabs.get(tabId);
+                        if (!tab || !tab.windowId) {
+                            sendResponse({ success: false, message: "tab not found" });
+                            return;
+                        }
+
+                        await browser.windows.update(tab.windowId, { focused: true });
+                        await browser.tabs.update(tabId, { active: true });
+                        sendResponse({ success: true, tabId });
+                    } catch (error) {
+                        sendResponse({ success: false, message: (error as Error).message });
+                    }
+                })();
+                return true;
             default:
                 console.log("Unknown action:", request.action);
         }
