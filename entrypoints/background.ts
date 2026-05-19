@@ -276,9 +276,49 @@ export default defineBackground(() => {
             });
     };
 
+    const getShowNameByOpenTab = async (sendResponse: (response: any) => void) => {
+        try {
+            const tab = await browser.tabs.create({ url: "https://x.com/home", active: false });
+            if (!tab.id) {
+                sendResponse({ showName: null });
+                return;
+            }
+
+            let showName = null;
+            for (let i = 0; i < 15; i++) {
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+                try {
+                    const response: any = await browser.tabs.sendMessage(tab.id, {
+                        action: "extractShowName"
+                    });
+                    if (response && response.showName) {
+                        showName = response.showName;
+                        break;
+                    }
+                } catch (e) {
+                    console.log("getShowNameByOpenTab sendMessage error", e);
+                }
+            }
+
+            try {
+                await browser.tabs.remove(tab.id);
+            } catch (e) {
+                console.error("failed to close tab", e);
+            }
+
+            sendResponse({ showName });
+        } catch (error) {
+            console.error("getShowNameByOpenTab error:", error);
+            sendResponse({ showName: null });
+        }
+    };
+
     browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
         console.log("Message received in background:", request);
         switch (request.action) {
+            case "getShowNameByOpenTab":
+                getShowNameByOpenTab(sendResponse);
+                return true;
             case "generateComment":
                 generateComment(sendResponse, request.data);
                 return true;
@@ -352,10 +392,13 @@ export default defineBackground(() => {
             return;
         }
         taskState = "processing";
-        timeroutHandle = setTimeout(() => {
-            //超时处理
-            taskErrorFinished();
-        }, 3 * 60 * 1000);
+        timeroutHandle = setTimeout(
+            () => {
+                //超时处理
+                taskErrorFinished();
+            },
+            3 * 60 * 1000
+        );
         console.log(`正在处理任务: ${task.id}`, task);
         logInfo("插件：" + `正在处理任务: ${task.workflowName}(${task.id})`);
         let checkRes = await workflowApi.checkMission(task.id);

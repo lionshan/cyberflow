@@ -152,7 +152,23 @@ const showWorkflowName = computed(() => {
     return name;
 });
 const reverseLogs = computed(() => {
-    return logs.value.slice().reverse();
+    const reversed = logs.value.slice().reverse();
+    if (reversed.length === 0) return reversed;
+
+    let count = 0;
+    let currentLogStr = reversed[reversed.length - 1].log;
+
+    // 从旧到新遍历（在倒序数组中是从后往前），为连续相同的日志添加自增编号
+    for (let i = reversed.length - 2; i >= 0; i--) {
+        if (reversed[i].log === currentLogStr) {
+            count++;
+            reversed[i] = { ...reversed[i], log: `${reversed[i].log}[${count}]` };
+        } else {
+            currentLogStr = reversed[i].log;
+            count = 0;
+        }
+    }
+    return reversed;
 });
 watch(
     () => props.workflowData,
@@ -224,6 +240,7 @@ const startOnClickComment = (aiId: string | number) => {
             });
     });
 };
+
 const checkLogs = () => {
     //获取日志
     if (logTimer) {

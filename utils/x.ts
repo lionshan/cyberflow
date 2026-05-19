@@ -10,6 +10,7 @@ interface AccountInfo {
     extraData: unknown;
     xAccountInfoChange?: boolean;
     isBlueVerified: boolean;
+    showName?: string;
 }
 import { selfLocalStorage } from "@/utils/storage";
 async function checkNeedRetry() {
@@ -128,6 +129,7 @@ export async function getXAccountInfo(): Promise<AccountInfo> {
         }
 
         htmlText = await response.text();
+        console.log("htmlTexthtmlText", htmlText);
     } catch (error) {
         console.error("获取 X 页面HTML失败:", error);
         throw new Error(`网络异常无法访问x.com,请检查网络设置`);
@@ -135,7 +137,6 @@ export async function getXAccountInfo(): Promise<AccountInfo> {
 
     // 解析window.__INITIAL_STATE__
     const initialStateMatch = htmlText.match(/window\.__INITIAL_STATE__\s*=\s*(\{.+?\})(?:\s*;|\s*<\/script>)/s);
-
     if (!initialStateMatch || !initialStateMatch[1]) {
         throw new Error("无法找到 __INITIAL_STATE__ 数据");
     }
@@ -146,6 +147,7 @@ export async function getXAccountInfo(): Promise<AccountInfo> {
     let initialState;
     try {
         initialState = JSON.parse(jsonStr);
+        console.log("initialStateinitialState", initialState);
     } catch (parseError) {
         console.error("解析 X __INITIAL_STATE__ 数据失败:", parseError);
         // 清理可能的JSON问题
@@ -163,6 +165,7 @@ export async function getXAccountInfo(): Promise<AccountInfo> {
 
     // 从entities.users.entities中获取用户信息，这里的键是动态的用户ID
     const usersEntities = initialState.entities?.users?.entities;
+    console.log("usersEntities", usersEntities);
     if (!usersEntities || Object.keys(usersEntities).length === 0) {
         return null;
     }
@@ -183,8 +186,23 @@ export async function getXAccountInfo(): Promise<AccountInfo> {
         profileUrl: `https://x.com/${userInfo.screen_name}`,
         avatarUrl: userInfo.profile_image_url_https,
         extraData: initialState,
-        isBlueVerified: userInfo.is_blue_verified
+        isBlueVerified: userInfo.is_blue_verified,
+        showName: userInfo.screen_name
     };
+
+    try {
+        // 在 Content script 非 x.com 环境，通知 background 代为执行
+        const res = await browser.runtime.sendMessage({ action: "getShowNameByOpenTab" });
+        if (res && res.showName) {
+            result.showName = res.showName;
+            if (!!result.showName && result.accountId != result.showName) {
+                result.accountId = result.showName;
+            }
+        }
+    } catch (error) {
+        console.error("获取 showName 失败:", error);
+    }
+
     // let oldUserName = await selfLocalStorage.getItem("xUserName");
     // if (oldUserName && oldUserName !== userInfo.screen_name) {
     //     console.log(
@@ -201,7 +219,7 @@ export async function getXAccountInfo(): Promise<AccountInfo> {
     //         xAccountInfoChange: true
     //     };
     // }
-    selfLocalStorage.setItem("xUserName", userInfo.screen_name);
+    selfLocalStorage.setItem("xUserName", result.showName || userInfo.screen_name);
     return result;
 }
 

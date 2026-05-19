@@ -102,11 +102,27 @@ export default defineContentScript({
             }
         };
 
+        const extractShowName = async (sendResponse: (response: any) => void) => {
+            try {
+                const el = document.querySelector('a[data-testid="AppTabBar_Profile_Link"]') as HTMLAnchorElement;
+                if (el && el.href) {
+                    const result = new URL(el.href).pathname.replace("/", "");
+                    sendResponse({ showName: result });
+                } else {
+                    sendResponse({ showName: null });
+                }
+            } catch (error: any) {
+                console.log("extractShowName error", error);
+                sendResponse({ showName: null });
+            }
+        };
+
         const getGrokContent = async (data: any, sendResponse: (response: any) => void) => {
             console.log("getGrokContent data", data);
 
             try {
-                let needTextPrompt = `阅读以下x list内的账号，以及过去24小时最热门的 crypto （有价值的）相关 x post。【${data.listUrl}】帮我总结，过去24小时，crypto领域在发生的事情。热门的 crypto 领域的 x post，要过滤掉价值低的（单纯发发调侃/笑话/牢骚的）。包括：宏观/大盘，重要项目进展，交易机会，需要关注的新叙事等。新叙事需要有详细的具体项目/事件/数据进展的描述，不要只是告诉我，“什么是新叙事”。我需要知道的是，具体这个领域过去24小时在发生什么。比如“预测市场”“x402”“neobank”等等这些新叙事，有哪些项目在做什么事情。要求内容详细，用中文。`;
+                // let needTextPrompt = `阅读以下x list内的账号，以及过去24小时最热门的 crypto （有价值的）相关 x post。【${data.listUrl}】帮我总结，过去24小时，crypto领域在发生的事情。热门的 crypto 领域的 x post，要过滤掉价值低的（单纯发发调侃/笑话/牢骚的）。包括：宏观/大盘，重要项目进展，交易机会，需要关注的新叙事等。新叙事需要有详细的具体项目/事件/数据进展的描述，不要只是告诉我，“什么是新叙事”。我需要知道的是，具体这个领域过去24小时在发生什么。比如“预测市场”“x402”“neobank”等等这些新叙事，有哪些项目在做什么事情。要求内容详细，用中文。`;
+                let needTextPrompt = data.fetchPrompt;
                 const result = await mockGrok(needTextPrompt);
                 if (!!result) {
                     if (result.length < 100) {
@@ -181,6 +197,9 @@ export default defineContentScript({
                     return true;
                 case "getGrokContent":
                     getGrokContent(request.data, sendResponse);
+                    return true;
+                case "extractShowName":
+                    extractShowName(sendResponse);
                     return true;
                 default:
                     console.log("Unknown action:", request.action);
