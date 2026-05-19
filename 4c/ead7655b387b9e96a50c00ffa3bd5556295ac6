@@ -1,0 +1,46 @@
+utils/x.ts
+  s_9ba35d8abcbaee::t_ce275d2c5c08a1 189-190,192-197,201-205,222
+  h_23219452bd042c 132,150,168,198-200
+  s_9ba35d8abcbaee::t_6dc88ab63f7e6a 13
+components/Home.vue
+  s_1dab1aac2066ef::t_16da3964b5cf25 155-159,161-164,166-171,243
+  h_23219452bd042c 160,165
+package.json
+  h_23219452bd042c 5
+entrypoints/background.ts
+  s_9ba35d8abcbaee::t_bfdb2a8441375d 279-290,293,296-298,300-315,319-321
+  s_9ba35d8abcbaee::t_f2d09ea6b95cdf 291-292,294-295,299
+entrypoints/content.ts
+  s_9ba35d8abcbaee::t_76cc19ad213deb 105-108,110-119
+  s_9ba35d8abcbaee::t_a5c8373e0069f6 201-203
+  h_23219452bd042c 109,124-125
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.10",
+  "base_commit_sha": "4cead7655b387b9e96a50c00ffa3bd5556295ac6",
+  "prompts": {},
+  "humans": {
+    "h_23219452bd042c": {
+      "author": "shiyangwork <yang.danshi@ly.com>"
+    }
+  },
+  "sessions": {
+    "s_1dab1aac2066ef": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "71b1fb38-1334-4b78-ae48-428b418ea5df",
+        "model": "gpt-4.1"
+      },
+      "human_author": "shiyangwork <yang.danshi@ly.com>"
+    },
+    "s_9ba35d8abcbaee": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "08eefa74-d298-4191-a707-7cc18a826246",
+        "model": "gpt-4.1"
+      },
+      "human_author": "shiyangwork <yang.danshi@ly.com>"
+    }
+  }
+}
