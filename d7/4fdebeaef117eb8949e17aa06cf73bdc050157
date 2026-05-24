@@ -1,0 +1,36 @@
+utils/x.ts
+  s_9ba35d8abcbaee::t_8bf7d41273abf3 199-203
+  h_23219452bd042c 198,228
+x_grok.html
+  h_23219452bd042c 1-11
+entrypoints/background.ts
+  h_23219452bd042c 287,295,309
+package.json
+  h_23219452bd042c 5
+entrypoints/content.ts
+  h_23219452bd042c 110-113
+  s_9ba35d8abcbaee::t_1bc89646da810c 109
+components/Home.vue
+  h_23219452bd042c 80,89,773-774,778-780
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.11",
+  "base_commit_sha": "d74fdebeaef117eb8949e17aa06cf73bdc050157",
+  "prompts": {},
+  "humans": {
+    "h_23219452bd042c": {
+      "author": "shiyangwork <yang.danshi@ly.com>"
+    }
+  },
+  "sessions": {
+    "s_9ba35d8abcbaee": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "08eefa74-d298-4191-a707-7cc18a826246",
+        "model": "gpt-4.1"
+      },
+      "human_author": "shiyangwork <yang.danshi@ly.com>"
+    }
+  }
+}
