@@ -77,7 +77,7 @@
                 </div>
                 <!-- 开启按钮 -->
                 <div class="start-section">
-                    <div
+                    <!-- <div
                         class="start-btn"
                         :class="{
                             actionDisable: selectflows.length == 0 || xData == null
@@ -86,8 +86,8 @@
                         v-if="!jobId"
                     >
                         开启
-                    </div>
-                    <div class="stop-btn" @click="stopJob" v-else>
+                    </div> -->
+                    <div class="stop-btn" @click="stopJob">
                         停止
                         <div class="tips">开启工作流后请不要切换浏览器tab页面，或者操作鼠标，插件将自动打开x.com进行工作</div>
                     </div>
@@ -533,7 +533,9 @@ const handleStart = () => {
         }
 
         .username {
-            font-family: PingFang SC, PingFang SC;
+            font-family:
+                PingFang SC,
+                PingFang SC;
             font-weight: 600;
             font-size: 16px;
             color: rgba(0, 0, 0, 0.85);
@@ -549,7 +551,9 @@ const handleStart = () => {
         .logout-btn {
             cursor: pointer;
             height: 20px;
-            font-family: PingFang SC, PingFang SC;
+            font-family:
+                PingFang SC,
+                PingFang SC;
             font-weight: 400;
             font-size: 14px;
             color: #9e40ff;
@@ -565,7 +569,9 @@ const handleStart = () => {
             display: flex;
             align-items: center;
             justify-content: center;
-            font-family: PingFang SC, PingFang SC;
+            font-family:
+                PingFang SC,
+                PingFang SC;
             font-weight: 500;
             font-size: 16px;
             color: #ffffff;
@@ -646,7 +652,9 @@ const handleStart = () => {
         justify-content: start;
         min-width: 0;
         .label {
-            font-family: PingFang SC, PingFang SC;
+            font-family:
+                PingFang SC,
+                PingFang SC;
             font-weight: 400;
             font-size: 14px;
             color: rgba(0, 0, 0, 0.65);
@@ -657,7 +665,9 @@ const handleStart = () => {
             min-width: max-content;
         }
         .value {
-            font-family: PingFang SC, PingFang SC;
+            font-family:
+                PingFang SC,
+                PingFang SC;
             font-weight: 400;
             font-size: 14px;
             color: #000000;
@@ -671,7 +681,9 @@ const handleStart = () => {
             min-width: 0;
         }
         .tips {
-            font-family: PingFang SC, PingFang SC;
+            font-family:
+                PingFang SC,
+                PingFang SC;
             font-weight: 400;
             font-size: 14px;
             color: rgba(0, 0, 0, 0.25);
@@ -684,7 +696,9 @@ const handleStart = () => {
 
     .action-btn {
         cursor: pointer;
-        font-family: PingFang SC, PingFang SC;
+        font-family:
+            PingFang SC,
+            PingFang SC;
         font-weight: 400;
         font-size: 14px;
         color: #9e40ff;
@@ -716,7 +730,9 @@ const handleStart = () => {
         height: 40px;
         background: #9e40ff;
         border-radius: 8px 8px 8px 8px;
-        font-family: PingFang SC, PingFang SC;
+        font-family:
+            PingFang SC,
+            PingFang SC;
         font-weight: 500;
         font-size: 18px;
         color: #ffffff;
@@ -738,7 +754,9 @@ const handleStart = () => {
         height: 40px;
         background: #ff4040;
         border-radius: 8px 8px 8px 8px;
-        font-family: PingFang SC, PingFang SC;
+        font-family:
+            PingFang SC,
+            PingFang SC;
         font-weight: 500;
         font-size: 18px;
         color: #ffffff;
@@ -752,11 +770,14 @@ const handleStart = () => {
             bottom: 45px;
             left: 50%;
             transform: translate(-50%);
-            width: 300px;
-            font-family: PingFang SC, PingFang SC;
-            font-weight: 400;
-            font-size: 12px;
-            color: #000;
+            width: 400px;
+            font-weight: 600;
+            font-family:
+                PingFang SC,
+                PingFang SC;
+            font-weight: 600;
+            font-size: 16px;
+            color: #ef2424;
             text-align: center;
             font-style: normal;
             text-transform: none;
@@ -779,7 +800,9 @@ const handleStart = () => {
         flex-direction: column;
         align-items: start;
         .time {
-            font-family: PingFang SC, PingFang SC;
+            font-family:
+                PingFang SC,
+                PingFang SC;
             font-weight: 400;
             font-size: 14px;
             color: #999999;
@@ -788,7 +811,9 @@ const handleStart = () => {
             text-transform: none;
         }
         .log {
-            font-family: PingFang SC, PingFang SC;
+            font-family:
+                PingFang SC,
+                PingFang SC;
             font-weight: 400;
             font-size: 14px;
             color: #000000;

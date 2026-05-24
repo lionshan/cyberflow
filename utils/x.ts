@@ -195,6 +195,12 @@ export async function getXAccountInfo(): Promise<AccountInfo> {
         const res = await browser.runtime.sendMessage({ action: "getShowNameByOpenTab" });
         if (res && res.showName) {
             result.showName = res.showName;
+
+            // 使用从真实的 X.com tab 中解析出来的完整状态，它能保证委托用户的正确性
+            if (typeof res.isBlueVerified === "boolean") {
+                result.isBlueVerified = res.isBlueVerified;
+            }
+
             if (!!result.showName && result.accountId != result.showName) {
                 result.accountId = result.showName;
             }
@@ -219,6 +225,7 @@ export async function getXAccountInfo(): Promise<AccountInfo> {
     //         xAccountInfoChange: true
     //     };
     // }
+    console.log("Setting xUserName:", result);
     selfLocalStorage.setItem("xUserName", result.showName || userInfo.screen_name);
     return result;
 }

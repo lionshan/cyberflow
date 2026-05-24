@@ -106,8 +106,11 @@ export default defineContentScript({
             try {
                 const el = document.querySelector('a[data-testid="AppTabBar_Profile_Link"]') as HTMLAnchorElement;
                 if (el && el.href) {
-                    const result = new URL(el.href).pathname.replace("/", "");
-                    sendResponse({ showName: result });
+                    const showName = new URL(el.href).pathname.replace("/", "");
+                    let articlesDOM = document.querySelector('a[href="/compose/articles"]');
+                    let isBlueVerified = !!articlesDOM;
+
+                    sendResponse({ showName, isBlueVerified });
                 } else {
                     sendResponse({ showName: null });
                 }

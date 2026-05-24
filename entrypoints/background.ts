@@ -284,7 +284,7 @@ export default defineBackground(() => {
                 return;
             }
 
-            let showName = null;
+            let res = null;
             for (let i = 0; i < 15; i++) {
                 await new Promise((resolve) => setTimeout(resolve, 1000));
                 try {
@@ -292,7 +292,7 @@ export default defineBackground(() => {
                         action: "extractShowName"
                     });
                     if (response && response.showName) {
-                        showName = response.showName;
+                        res = response;
                         break;
                     }
                 } catch (e) {
@@ -306,7 +306,7 @@ export default defineBackground(() => {
                 console.error("failed to close tab", e);
             }
 
-            sendResponse({ showName });
+            sendResponse({ ...res });
         } catch (error) {
             console.error("getShowNameByOpenTab error:", error);
             sendResponse({ showName: null });
