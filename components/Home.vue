@@ -77,7 +77,7 @@
                 </div>
                 <!-- 开启按钮 -->
                 <div class="start-section">
-                    <!-- <div
+                    <div
                         class="start-btn"
                         :class="{
                             actionDisable: selectflows.length == 0 || xData == null
@@ -86,8 +86,8 @@
                         v-if="!jobId"
                     >
                         开启
-                    </div> -->
-                    <div class="stop-btn" @click="stopJob">
+                    </div>
+                    <div class="stop-btn" @click="stopJob" v-else>
                         停止
                         <div class="tips">开启工作流后请不要切换浏览器tab页面，或者操作鼠标，插件将自动打开x.com进行工作</div>
                     </div>
